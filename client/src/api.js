@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
+// Empty = same address as the page (FastAPI serves the dashboard). Set only to call an API elsewhere.
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 export function toQuery(filters) {
   const params = new URLSearchParams();

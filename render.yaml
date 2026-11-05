@@ -1,31 +1,16 @@
-# Render Blueprint: creates the API and the dashboard together. Render reads this file from the repo root.
+# Render Blueprint: one web service that builds the dashboard (client/) and serves it from the API (server/).
 services:
-  # API (server/)
   - type: web
-    name: ministry-jobs-api
+    name: ministry-jobs-analyser
     runtime: python
-    rootDir: server
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: cd client && npm ci && npm run build && cd ../server && pip install -r requirements.txt
+    startCommand: cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
-      - key: DATABASE_URL
-        sync: false   # your Neon connection string (the -pooler one)
-      - key: ALLOWED_ORIGIN
-        value: "*"    # optional: set to the dashboard's URL once it exists
-
-  # Dashboard (client/), served as a static site
-  - type: web
-    name: ministry-jobs-dashboard
-    runtime: static
-    rootDir: client
-    buildCommand: npm ci && npm run build
-    staticPublishPath: dist
-    envVars:
       - key: NODE_VERSION
         value: "20"
-      - key: VITE_API_BASE
-        sync: false   # the API's URL, e.g. https://ministry-jobs-api.onrender.com (no trailing slash)
+      - key: DATABASE_URL
+        sync: false   # your Neon connection string (the -pooler one)

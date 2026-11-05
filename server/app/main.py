@@ -1,7 +1,9 @@
+from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app import jobs
 from app.config import ALLOWED_ORIGIN
@@ -59,3 +61,10 @@ def summary(filters: dict = Depends(job_filters)):
         jobs.apply_filters(all_jobs, filters, skip=("role",)),
         jobs.apply_filters(all_jobs, filters, skip=("region",)),
     )
+
+
+# The built dashboard (client/dist), served from the same address as the API.
+# Mounted last so /api/* routes win. Skipped when the client hasn't been built (local dev uses Vite).
+CLIENT_DIST = Path(__file__).resolve().parents[2] / "client" / "dist"
+if CLIENT_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=CLIENT_DIST, html=True), name="client")

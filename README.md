@@ -53,12 +53,19 @@ npm run dev                               # http://localhost:5173
 
 ## Deploy
 
-Everything runs on Render from one blueprint, `render.yaml`; the data lives on Neon.
+One Render web service builds the dashboard and serves it from the API, so the
+app and its API share one address. The data lives on Neon.
 
-| Part | Host | Settings |
-|---|---|---|
-| Database | Neon Postgres (loaded with the full local data) | the API uses the pooled (`-pooler`) connection string; run restores and the pipeline against the direct one (same host without `-pooler`) |
-| API | Render web service `ministry-jobs-api` | `DATABASE_URL` = the Neon pooled connection string |
-| Dashboard | Render static site `ministry-jobs-dashboard` | `VITE_API_BASE` = the API's URL, e.g. `https://ministry-jobs-api.onrender.com` |
+| Render field | Value |
+|---|---|
+| Root Directory | *(empty: the repo root)* |
+| Build Command | `cd client && npm ci && npm run build && cd ../server && pip install -r requirements.txt` |
+| Start Command | `cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Health Check Path | `/api/health` |
+| Environment | `DATABASE_URL` = the Neon pooled (`-pooler`) connection string; `PYTHON_VERSION` = `3.12.8`; `NODE_VERSION` = `20` |
 
-In Render: New → Blueprint → pick this repo. Every `git push` redeploys both.
+`render.yaml` holds the same settings (New → Blueprint). Every `git push`
+redeploys. Run database restores and the pipeline against Neon's direct
+connection string (same host without `-pooler`).
+
+In local dev, Vite (port 5173) forwards `/api` to the API on port 8000.

@@ -65,7 +65,8 @@ npm run dev             # http://localhost:5173
 
 ## Deploy
 
-The dashboard deploys as a Render static site from `render.yaml` at the repo
-root: it builds with `npm ci && npm run build` and publishes `dist/`. Set the
-`VITE_API_BASE` environment variable to the deployed API's URL. It is baked in
-at build time, so changing it needs a redeploy.
+The dashboard has no host of its own. The Render web service builds it
+(`npm run build` → `client/dist/`) and FastAPI serves those files at `/`,
+next to the API at `/api`, so the dashboard calls the API on its own address.
+In dev, `vite.config.js` forwards `/api` to `127.0.0.1:8000`. `VITE_API_BASE`
+is optional, only for pointing the dashboard at an API elsewhere.

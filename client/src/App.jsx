@@ -139,7 +139,7 @@ export default function App() {
         {error && (
           <div className="card error-card" role="alert">
             <strong>Couldn’t load the benchmarks.</strong>
-            <span className="muted">The API at {import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000"} didn’t answer ({error}). Check that the server is running.</span>
+            <span className="muted">The server didn’t answer ({error}). It may be waking up; try again in a minute.</span>
             <button type="button" className="btn" onClick={() => load(filters)}>Retry</button>
           </div>
         )}
