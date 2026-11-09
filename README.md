@@ -37,6 +37,34 @@ psql "$DATABASE_URL" -f database/schema.sql
 python -m pipeline.ingest data/raw/church_jobs_feed_02.10.26.json
 ```
 
+**Optional: the BizDev Excel sources** (from `server/`; the spreadsheets live in the git-ignored `data/` folder because they hold contact details)
+
+```bash
+python -m pipeline.import_bizdev churches "../data/API BizDev_ Churches.xlsx"
+python -m pipeline.import_bizdev nonprofits "../data/API BizDev_ Nonprofits (Actual).xlsx"
+python -m pipeline.fetch_jobs churches     # reads each job page for pay, job type, church size
+python -m pipeline.fetch_jobs nonprofits   # add --retry to re-try blocked/failed pages
+```
+
+**Tracking expired jobs** (from `server/`). Each check records whether a job's page is still open:
+
+```bash
+python -m pipeline.fetch_jobs json                 # first check of the JSON feed's job URLs
+python -m pipeline.fetch_jobs churches --recheck   # re-check every job not yet expired; run weekly
+python -m pipeline.fetch_jobs nonprofits --recheck
+python -m pipeline.fetch_jobs json --recheck
+```
+
+A job's status is `ok` (open), `expired` (404 / "position filled" / Workday says it's closed), `unknown`
+(a JavaScript-only page such as Paycom, ADP or HRM Direct, so open or closed can't be told), `blocked` or
+`error`. `last_live_at` is the latest check that found it open; `expired_at` is the first that found it
+closed, so the job closed between the two. Feed results live in `posting_checks`; the BizDev tables carry
+the same columns. The dashboard's **More filters → Status** and the table's Status column show them.
+
+The dashboard shows each source on its own tab (`?source=json|churches|nonprofits`). The import creates
+`json_jobs` (a view of the feed), `church_jobs` and `nonprofit_jobs`. Contact names and emails stay in
+the database; the API never returns them.
+
 **2. API** (from `server/`)
 
 ```bash

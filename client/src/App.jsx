@@ -5,13 +5,21 @@ import PayLadder from "./components/PayLadder.jsx";
 import BreakdownList from "./components/BreakdownList.jsx";
 import PayDistribution from "./components/PayDistribution.jsx";
 import JobsTable from "./components/JobsTable.jsx";
-import { fetchFilterOptions, fetchJobs, fetchSummary, toQuery } from "./api.js";
+import SourceTabs from "./components/SourceTabs.jsx";
+import { fetchFilterOptions, fetchJobs, fetchSources, fetchSummary, toQuery } from "./api.js";
 import { MIN_PAID, count, longDate, money } from "./format.js";
 
 const EMPTY_FILTERS = {
-  search: "", role: "", region: "", denomination: "", min_church_size: 0, hours: "",
+  search: "", role: "", region: "", denomination: "", min_church_size: 0, hours: "", status: "",
   country: "", remote: "", min_salary: 0, has_pay: false,
 };
+
+const SOURCES = ["json", "churches", "nonprofits"];
+
+function sourceFromUrl() {
+  const s = new URLSearchParams(window.location.search).get("source");
+  return SOURCES.includes(s) ? s : "json";
+}
 
 function filtersFromUrl() {
   const params = new URLSearchParams(window.location.search);
@@ -70,6 +78,8 @@ function LoadingCard({ className, title, rows = 6 }) {
 }
 
 export default function App() {
+  const [source, setSource] = useState(sourceFromUrl);
+  const [sources, setSources] = useState(null);
   const [filters, setFilters] = useState(filtersFromUrl);
   const [options, setOptions] = useState(null);
   const [summary, setSummary] = useState(null);
@@ -80,13 +90,15 @@ export default function App() {
   const requestId = useRef(0);
 
   useEffect(() => {
-    fetchFilterOptions().then(setOptions).catch(() => {});
-  }, []);
+    setOptions(null);
+    fetchFilterOptions(source).then(setOptions).catch(() => {});
+    fetchSources().then(setSources).catch(() => {});
+  }, [source]);
 
-  const load = useCallback((f) => {
+  const load = useCallback((src, f) => {
     const id = ++requestId.current;
     setUpdating(true);
-    Promise.all([fetchSummary(f), fetchJobs(f)])
+    Promise.all([fetchSummary(src, f), fetchJobs(src, f)])
       .then(([s, j]) => {
         if (id !== requestId.current) return;
         setSummary(s);
@@ -98,29 +110,41 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const query = toQuery(filters);
+    const query = toQuery({ source: source === "json" ? "" : source, ...filters });
     window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
-    const timer = setTimeout(() => load(filters), 200);
+    const timer = setTimeout(() => load(source, filters), 200);
     return () => clearTimeout(timer);
-  }, [filters, load]);
+  }, [source, filters, load]);
+
+  // Filter values differ per source (roles, states, denominations), so a switch starts clean.
+  const changeSource = (next) => {
+    setSummary(null);
+    setRows([]);
+    setFilters(EMPTY_FILTERS);
+    setSource(next);
+  };
 
   const setFilter = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
   const clearFilter = (key) => setFilter(key, EMPTY_FILTERS[key]);
   const resetFilters = () => setFilters(EMPTY_FILTERS);
-  const exportCsv = () => table?.download("csv", `ministry-jobs-${new Date().toISOString().slice(0, 10)}.csv`);
+  const exportCsv = () => table?.download("csv", `ministry-jobs-${source}-${new Date().toISOString().slice(0, 10)}.csv`);
 
   const s = summary?.stats;
+  const current = sources?.find((x) => x.key === source);
+  const isChurch = source !== "nonprofits";
 
   return (
     <>
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand"><Mark />Ministry Jobs Analyser</div>
-          <div className="freshness">Church jobs feed · data as of {s ? longDate(s.as_of) : "…"}</div>
+          <div className="freshness">{current?.label || "…"} · {source === "json" ? "data as of" : "pages last read"} {s?.as_of ? longDate(s.as_of) : "…"}</div>
         </div>
       </header>
 
       <main className="canvas">
+        <SourceTabs sources={sources} value={source} onChange={changeSource} />
+
         <div className="title-row">
           <div>
             <h1>Salary benchmarks</h1>
@@ -134,13 +158,13 @@ export default function App() {
           </button>
         </div>
 
-        <FilterBar filters={filters} setFilter={setFilter} clearFilter={clearFilter} resetFilters={resetFilters} options={options} />
+        <FilterBar filters={filters} setFilter={setFilter} clearFilter={clearFilter} resetFilters={resetFilters} options={options} showChurchSize={isChurch} />
 
         {error && (
           <div className="card error-card" role="alert">
             <strong>Couldn’t load the benchmarks.</strong>
             <span className="muted">The server didn’t answer ({error}). It may be waking up; try again in a minute.</span>
-            <button type="button" className="btn" onClick={() => load(filters)}>Retry</button>
+            <button type="button" className="btn" onClick={() => load(source, filters)}>Retry</button>
           </div>
         )}
 
@@ -176,14 +200,14 @@ export default function App() {
                     <PayLadder compact rows={summary.by_state} nameHeader="State" selected={filters.region} onSelect={(v) => setFilter("region", v)} />
                   </section>
 
-                  <section className="card" aria-labelledby="h-size">
+                  {isChurch && <section className="card" aria-labelledby="h-size">
                     <div className="card-head">
                       <h2 id="h-size">By church size</h2>
                       <span className="meta">Weekly attendance</span>
                     </div>
                     <BreakdownList rows={summary.by_church_size.filter((r) => r.postings > 0)} nameHeader="Attendance" />
                     <p className="card-note">{count(s.no_church_size)} of {count(s.postings)} postings don’t state church size.</p>
-                  </section>
+                  </section>}
                 </div>
 
                 <section className="card span-7 fill" aria-labelledby="h-dist">

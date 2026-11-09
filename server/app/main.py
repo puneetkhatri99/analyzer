@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +24,7 @@ def job_filters(
     region: Optional[str] = None,
     country: Optional[str] = None,
     hours: Optional[str] = None,
+    status: Optional[Literal["open", "expired", "unverified"]] = None,
     remote: Optional[str] = None,
     search: Optional[str] = None,
     has_pay: bool = False,
@@ -32,7 +33,7 @@ def job_filters(
 ) -> dict:
     return {
         "role": role, "denomination": denomination, "region": region, "country": country,
-        "hours": hours, "remote": remote, "search": search, "has_pay": has_pay,
+        "hours": hours, "status": status, "remote": remote, "search": search, "has_pay": has_pay,
         "min_salary": min_salary, "min_church_size": min_church_size,
     }
 
@@ -42,20 +43,29 @@ def health():
     return {"ok": True}
 
 
+# json = the church jobs JSON feed; churches / nonprofits = the BizDev Excel imports.
+Source = Literal["json", "churches", "nonprofits"]
+
+
+@app.get("/api/sources")
+def sources():
+    return jobs.source_counts()
+
+
 @app.get("/api/filter-options")
-def filter_options():
-    return jobs.build_filter_options(jobs.load_jobs())
+def filter_options(source: Source = "json"):
+    return jobs.build_filter_options(jobs.load_jobs(source))
 
 
 @app.get("/api/jobs")
-def list_jobs(filters: dict = Depends(job_filters)):
-    rows = jobs.apply_filters(jobs.load_jobs(), filters)
+def list_jobs(source: Source = "json", filters: dict = Depends(job_filters)):
+    rows = jobs.apply_filters(jobs.load_jobs(source), filters)
     return {"total": len(rows), "rows": rows}
 
 
 @app.get("/api/summary")
-def summary(filters: dict = Depends(job_filters)):
-    all_jobs = jobs.load_jobs()
+def summary(source: Source = "json", filters: dict = Depends(job_filters)):
+    all_jobs = jobs.load_jobs(source)
     return jobs.build_summary(
         jobs.apply_filters(all_jobs, filters),
         jobs.apply_filters(all_jobs, filters, skip=("role",)),

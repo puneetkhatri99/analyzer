@@ -7,7 +7,8 @@ const CHURCH_SIZES = [
   [5000, "5,000+ attendance"],
 ];
 const MIN_PAY = [30000, 40000, 50000, 60000, 80000, 100000];
-const MORE_KEYS = ["country", "remote", "min_salary", "has_pay"];
+const MORE_KEYS = ["status", "country", "remote", "min_salary", "has_pay"];
+const STATUS = { open: "Still open", expired: "Expired", unverified: "Not verified" };
 
 function Select({ id, label, value, onChange, children }) {
   return (
@@ -33,6 +34,7 @@ function describe(key, value) {
     case "denomination": return ["Denomination", value];
     case "min_church_size": return ["Church size", `${count(value)}+`];
     case "hours": return ["Type", value];
+    case "status": return ["Status", STATUS[value]];
     case "country": return ["Country", value];
     case "remote": return [value === "true" ? "Remote only" : "On-site only", null];
     case "min_salary": return ["Pay", `${money(value)}+`];
@@ -45,7 +47,7 @@ function XIcon() {
   return <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
 }
 
-export default function FilterBar({ filters, setFilter, clearFilter, resetFilters, options: opts }) {
+export default function FilterBar({ filters, setFilter, clearFilter, resetFilters, options: opts, showChurchSize = true }) {
   const moreActive = MORE_KEYS.filter((k) => filters[k]).length;
   const [moreOpen, setMoreOpen] = useState(moreActive > 0);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -81,10 +83,12 @@ export default function FilterBar({ filters, setFilter, clearFilter, resetFilter
           <Select id="f-denom" label="Denomination" value={filters.denomination} onChange={(v) => setFilter("denomination", v)}>
             <option value="">All denominations</option>{options(o.denominations)}
           </Select>
-          <Select id="f-size" label="Church size" value={filters.min_church_size || ""} onChange={(v) => setFilter("min_church_size", Number(v) || 0)}>
-            <option value="">Any church size</option>
-            {CHURCH_SIZES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-          </Select>
+          {showChurchSize && (
+            <Select id="f-size" label="Church size" value={filters.min_church_size || ""} onChange={(v) => setFilter("min_church_size", Number(v) || 0)}>
+              <option value="">Any church size</option>
+              {CHURCH_SIZES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </Select>
+          )}
           <Select id="f-hours" label="Employment type" value={filters.hours} onChange={(v) => setFilter("hours", v)}>
             <option value="">Any job type</option>{options(o.hours)}
           </Select>
@@ -96,6 +100,10 @@ export default function FilterBar({ filters, setFilter, clearFilter, resetFilter
 
         {moreOpen && (
           <div className="more-row" id="more-filters">
+            <Select id="f-status" label="Job status" value={filters.status} onChange={(v) => setFilter("status", v)}>
+              <option value="">Open or expired</option>
+              {Object.entries(STATUS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </Select>
             <Select id="f-country" label="Country" value={filters.country} onChange={(v) => setFilter("country", v)}>
               <option value="">All countries</option>{options(o.countries)}
             </Select>

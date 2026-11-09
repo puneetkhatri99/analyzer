@@ -36,6 +36,16 @@ const COLUMNS = [
     },
     accessorDownload: (_v, d) => payText(d),
   },
+  {
+    title: "Status", field: "status", minWidth: 160, responsive: 3,
+    formatter: (c) => {
+      const d = c.getData();
+      if (d.status === "expired") return `<span class="status expired" title="${d.last_live_at ? `Last seen open ${isoDate(d.last_live_at)}` : "Never seen open"}">Expired <span class="num">${isoDate(d.expired_at)}</span></span>`;
+      if (d.status === "open") return `<span class="status open" title="Checked open on ${isoDate(d.last_live_at)}">Open</span>`;
+      return `<span class="status" title="The job page couldn't be read, so it isn't known whether it's still open">Not verified</span>`;
+    },
+    accessorDownload: (_v, d) => (d.status === "expired" ? `Expired ${isoDate(d.expired_at)}` : d.status === "open" ? "Open" : "Not verified"),
+  },
   { title: "Type", field: "hours", minWidth: 100, responsive: 3, formatter: (c) => esc(c.getValue()) || DASH },
   {
     title: "Posted", field: "first_indexed", minWidth: 110, responsive: 2, hozAlign: "right", headerHozAlign: "right",

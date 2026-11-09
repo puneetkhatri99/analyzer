@@ -35,7 +35,8 @@ ROLE_RULES = [
     (r"facilit|maintenance|custodia|janitor|groundskeep", "Facilities"),
     (r"finance|accounting|bookkeep|payroll", "Finance"),
     (r"administ|operations|office manager|executive assistant", "Administrative/Operations"),
-    (r"pastor|minister|clergy|priest|rector|rabbi|imam", "Pastor/Minister (other)"),
+    # \b: "rector" must not match inside "Director"
+    (r"pastor|minister|clergy|priest|\brector\b|rabbi|\bimam\b", "Pastor/Minister (other)"),
     (r"director|coordinator|manager", "Director/Coordinator"),
     (r"teacher|professor|instructor|faculty", "Teacher/Faculty"),
     (r"nurse|clinical|health|therapist", "Healthcare"),

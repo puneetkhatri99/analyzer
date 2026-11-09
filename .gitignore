@@ -15,3 +15,6 @@ dist/
 
 # Design inspection screenshots
 .taste-skill/
+
+# Source spreadsheets and feed copies (contain contact names and emails)
+/data/

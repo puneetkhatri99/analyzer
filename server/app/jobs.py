@@ -27,39 +27,64 @@ _COLS = [
     "post_uuid", "job_name", "department", "hours", "seniority", "remote",
     "board_source", "post_url", "city", "region", "country", "company_name",
     "denomination", "church_size", "salary_min", "salary_max", "salary_period",
-    "first_indexed", "pull_date",
+    "first_indexed", "pull_date", "check_status", "last_live_at", "expired_at",
 ]
 
+# Latest check of the job's URL (pipeline/fetch_jobs.py) -> what the dashboard shows.
+# unknown / blocked / error / never checked all mean the same to a reader: not verified.
+STATUS = {"ok": "open", "expired": "expired"}
 
-def load_jobs():
-    """Every posting as a flat dict with its latest snapshot, plus derived role and annual pay.
 
-    Re-queried per request: at ~1,840 rows this takes a few ms, so there's no
+# Tables are schema-qualified: through a transaction pooler (Neon's -pooler host) a
+# shared session can carry another client's search_path, and unqualified names then fail.
+_FEED_SQL = """
+    SELECT p.post_uuid, p.job_name_raw, p.department, p.hours,
+           p.seniority, p.remote, p.board_source, p.post_url, p.city, p.region, p.country,
+           c.company_name, c.denomination, c.church_size,
+           s.salary_min, s.salary_max, s.salary_period,
+           p.first_indexed, s.pull_date, k.check_status, k.last_live_at, k.expired_at
+    FROM public.postings p
+    LEFT JOIN public.companies c USING (company_uuid)
+    LEFT JOIN public.posting_checks k USING (post_uuid)
+    LEFT JOIN LATERAL (
+        SELECT * FROM public.posting_snapshots ps
+        WHERE ps.post_uuid = p.post_uuid
+        ORDER BY ps.pull_date DESC
+        LIMIT 1
+    ) s ON true
+"""
+
+# The BizDev tables mapped onto the feed's columns. Contact names and emails are never selected:
+# the API is public.
+_BIZDEV_SQL = """
+    SELECT url_key, job_title, NULL, hours, NULL, remote, split_part(url_key, '/', 1), job_url,
+           city, state, 'US', org_name, denomination, church_size,
+           salary_min, salary_max, salary_period, date_posted, fetched_at::date,
+           fetch_status, last_live_at, expired_at
+    FROM public.{table}
+"""
+
+SOURCES = {
+    "json": {"label": "Church jobs feed", "sql": _FEED_SQL},
+    "churches": {"label": "BizDev churches", "sql": _BIZDEV_SQL.format(table="church_jobs")},
+    "nonprofits": {"label": "BizDev nonprofits", "sql": _BIZDEV_SQL.format(table="nonprofit_jobs")},
+}
+
+
+def load_jobs(source="json"):
+    """Every posting of one source as a flat dict, plus derived role and annual pay.
+
+    Re-queried per request: at a few thousand rows this takes a few ms, so there's no
     cache to invalidate when the pipeline re-runs.
     """
-    # Tables are schema-qualified: through a transaction pooler (Neon's -pooler host) a
-    # shared session can carry another client's search_path, and unqualified names then fail.
     with get_conn() as conn:
-        rows = conn.execute("""
-            SELECT p.post_uuid, p.job_name_raw, p.department, p.hours,
-                   p.seniority, p.remote, p.board_source, p.post_url, p.city, p.region, p.country,
-                   c.company_name, c.denomination, c.church_size,
-                   s.salary_min, s.salary_max, s.salary_period,
-                   p.first_indexed, s.pull_date
-            FROM public.postings p
-            LEFT JOIN public.companies c USING (company_uuid)
-            LEFT JOIN LATERAL (
-                SELECT * FROM public.posting_snapshots ps
-                WHERE ps.post_uuid = p.post_uuid
-                ORDER BY ps.pull_date DESC
-                LIMIT 1
-            ) s ON true
-        """).fetchall()
+        rows = conn.execute(SOURCES[source]["sql"]).fetchall()
 
     out = []
     for row in rows:
         d = {c: _conv(v) for c, v in zip(_COLS, row)}
         d["role"] = bucket_role(d["job_name"])
+        d["status"] = STATUS.get(d.pop("check_status"), "unverified")
         lo, hi, period = d["salary_min"], d["salary_max"], d["salary_period"]
         annual = None
         if lo is not None and hi is not None:
@@ -87,6 +112,8 @@ def apply_filters(jobs, f, skip=()):
         if f.get("region") and d["region"] != f["region"]:
             return False
         if f.get("country") and d["country"] != f["country"]:
+            return False
+        if f.get("status") and d["status"] != f["status"]:
             return False
         if f.get("hours") and d["hours"] != f["hours"]:
             return False
@@ -189,6 +216,20 @@ def build_summary(jobs, jobs_any_role, jobs_any_state):
         "histogram_bin": HISTOGRAM_BIN,
         "histogram_cap": HISTOGRAM_CAP,
     }
+
+
+def source_counts():
+    """Postings, pay and fetch progress per source, for the source switcher."""
+    out = []
+    with get_conn() as conn:
+        for key, s in SOURCES.items():
+            postings, paid, fetched, open_, expired = conn.execute(
+                "SELECT count(*), count(salary_min), count(pull_date), count(*) FILTER (WHERE check_status = 'ok'),"
+                f" count(*) FILTER (WHERE check_status = 'expired') FROM ({s['sql']}) j(" + ", ".join(_COLS) + ")"
+            ).fetchone()
+            out.append({"key": key, "label": s["label"], "postings": postings, "paid": paid, "fetched": fetched,
+                        "open": open_, "expired": expired})
+    return out
 
 
 def build_filter_options(jobs):

@@ -15,6 +15,7 @@ async function getJSON(path) {
   return res.json();
 }
 
-export const fetchFilterOptions = () => getJSON("/api/filter-options");
-export const fetchSummary = (filters) => getJSON(`/api/summary?${toQuery(filters)}`);
-export const fetchJobs = (filters) => getJSON(`/api/jobs?${toQuery(filters)}`);
+export const fetchSources = () => getJSON("/api/sources");
+export const fetchFilterOptions = (source) => getJSON(`/api/filter-options?${toQuery({ source })}`);
+export const fetchSummary = (source, filters) => getJSON(`/api/summary?${toQuery({ source, ...filters })}`);
+export const fetchJobs = (source, filters) => getJSON(`/api/jobs?${toQuery({ source, ...filters })}`);
