@@ -15,3 +15,7 @@ if _env_file.exists():
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+# Admin panel: AI extraction of jobs from any URL. Admin accounts live in the database (pipeline.create_admin).
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4-mini")

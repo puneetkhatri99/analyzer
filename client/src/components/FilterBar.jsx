@@ -7,7 +7,8 @@ const CHURCH_SIZES = [
   [5000, "5,000+ attendance"],
 ];
 const MIN_PAY = [30000, 40000, 50000, 60000, 80000, 100000];
-const MORE_KEYS = ["status", "country", "remote", "min_salary", "has_pay"];
+const MORE_KEYS = ["status", "origin", "country", "remote", "min_salary", "has_pay"];
+const ORIGIN = { feed: "JSON feed", excel: "Excel import", admin: "Added by admin" };
 const STATUS = { open: "Still open", expired: "Expired", unverified: "Not verified" };
 
 function Select({ id, label, value, onChange, children }) {
@@ -35,6 +36,7 @@ function describe(key, value) {
     case "min_church_size": return ["Church size", `${count(value)}+`];
     case "hours": return ["Type", value];
     case "status": return ["Status", STATUS[value]];
+    case "origin": return ["Added via", ORIGIN[value]];
     case "country": return ["Country", value];
     case "remote": return [value === "true" ? "Remote only" : "On-site only", null];
     case "min_salary": return ["Pay", `${money(value)}+`];
@@ -103,6 +105,10 @@ export default function FilterBar({ filters, setFilter, clearFilter, resetFilter
             <Select id="f-status" label="Job status" value={filters.status} onChange={(v) => setFilter("status", v)}>
               <option value="">Open or expired</option>
               {Object.entries(STATUS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </Select>
+            <Select id="f-origin" label="Added via" value={filters.origin} onChange={(v) => setFilter("origin", v)}>
+              <option value="">Any origin</option>
+              {Object.entries(ORIGIN).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
             </Select>
             <Select id="f-country" label="Country" value={filters.country} onChange={(v) => setFilter("country", v)}>
               <option value="">All countries</option>{options(o.countries)}

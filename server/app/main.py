@@ -3,9 +3,10 @@ from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import jobs
+from app import admin, jobs
 from app.config import ALLOWED_ORIGIN
 
 app = FastAPI(title="Ministry Jobs Analytics API")
@@ -25,6 +26,7 @@ def job_filters(
     country: Optional[str] = None,
     hours: Optional[str] = None,
     status: Optional[Literal["open", "expired", "unverified"]] = None,
+    origin: Optional[Literal["feed", "excel", "admin"]] = None,
     remote: Optional[str] = None,
     search: Optional[str] = None,
     has_pay: bool = False,
@@ -33,7 +35,7 @@ def job_filters(
 ) -> dict:
     return {
         "role": role, "denomination": denomination, "region": region, "country": country,
-        "hours": hours, "status": status, "remote": remote, "search": search, "has_pay": has_pay,
+        "hours": hours, "status": status, "origin": origin, "remote": remote, "search": search, "has_pay": has_pay,
         "min_salary": min_salary, "min_church_size": min_church_size,
     }
 
@@ -75,6 +77,10 @@ def summary(source: Source = "json", filters: dict = Depends(job_filters)):
 
 # The built dashboard (client/dist), served from the same address as the API.
 # Mounted last so /api/* routes win. Skipped when the client hasn't been built (local dev uses Vite).
+app.include_router(admin.router)
+
 CLIENT_DIST = Path(__file__).resolve().parents[2] / "client" / "dist"
 if CLIENT_DIST.is_dir():
+    # The admin page is a client-side route; serve the app's page for it.
+    app.get("/admin", include_in_schema=False)(lambda: FileResponse(CLIENT_DIST / "index.html"))
     app.mount("/", StaticFiles(directory=CLIENT_DIST, html=True), name="client")

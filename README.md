@@ -79,6 +79,28 @@ npm install
 npm run dev                               # http://localhost:5173
 ```
 
+## Admin panel
+
+`/admin` is a signed-in page where an admin pastes any job posting URL. The server reads the page
+(structured job data first, then the visible text; Workday through its job API; blocked or JavaScript-only
+pages through OpenAI web search), an OpenAI model extracts the job, and the admin reviews it and saves it
+to the churches or nonprofits dataset. Pages that aren't a single job posting are reported as such.
+
+Admin accounts live in the database (`admin_users`, scrypt-hashed passwords); sessions live in
+`admin_sessions`, so signing out ends a session immediately and no signing secret is needed. Create an admin,
+or reset a password, from `server/` (set `DATABASE_URL` to the Neon URL to do it in production):
+
+```bash
+python -m pipeline.create_admin admin@example.com   # asks for the password
+```
+
+Set in `server/.env` locally and in Render's environment settings in production:
+
+| Variable | Purpose |
+|---|---|
+| `OPENAI_API_KEY` | Enables extraction |
+| `OPENAI_MODEL` | Optional; default `gpt-5.4-mini` |
+
 ## Deploy
 
 One Render web service builds the dashboard and serves it from the API, so the

@@ -69,8 +69,27 @@ ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS last_live_at timestamptz;
 ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS expired_at   timestamptz;
 ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS last_live_at timestamptz;
 ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS expired_at   timestamptz;
+-- How each job arrived: 'excel' (the import; existing rows get it too), 'admin_page' or 'admin_web_search'
+-- (added in the admin panel, read from the page itself or via AI web search). added_by: the admin's email, for audit.
+ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS added_via text NOT NULL DEFAULT 'excel';
+ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS added_by  text;
+ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS added_via text NOT NULL DEFAULT 'excel';
+ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS added_by  text;
 -- backfill from checks made before these columns existed
 UPDATE church_jobs    SET last_live_at = fetched_at WHERE fetch_status = 'ok' AND last_live_at IS NULL;
 UPDATE church_jobs    SET expired_at   = fetched_at WHERE fetch_status = 'expired' AND expired_at IS NULL;
 UPDATE nonprofit_jobs SET last_live_at = fetched_at WHERE fetch_status = 'ok' AND last_live_at IS NULL;
 UPDATE nonprofit_jobs SET expired_at   = fetched_at WHERE fetch_status = 'expired' AND expired_at IS NULL;
+
+-- Admin panel accounts (create with: python -m pipeline.create_admin <email>). Passwords are scrypt hashes.
+CREATE TABLE IF NOT EXISTS admin_users (
+    email          text PRIMARY KEY,          -- stored lowercase
+    password_hash  text NOT NULL,
+    created_at     timestamptz NOT NULL DEFAULT now()
+);
+-- Signed-in sessions. Only a SHA-256 of the cookie token is kept; deleting a row signs that session out.
+CREATE TABLE IF NOT EXISTS admin_sessions (
+    token_hash  text PRIMARY KEY,
+    email       text NOT NULL REFERENCES admin_users(email) ON DELETE CASCADE,
+    expires_at  timestamptz NOT NULL
+);

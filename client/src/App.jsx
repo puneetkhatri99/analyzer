@@ -6,11 +6,12 @@ import BreakdownList from "./components/BreakdownList.jsx";
 import PayDistribution from "./components/PayDistribution.jsx";
 import JobsTable from "./components/JobsTable.jsx";
 import SourceTabs from "./components/SourceTabs.jsx";
+import JobDetail from "./components/JobDetail.jsx";
 import { fetchFilterOptions, fetchJobs, fetchSources, fetchSummary, toQuery } from "./api.js";
 import { MIN_PAID, count, longDate, money } from "./format.js";
 
 const EMPTY_FILTERS = {
-  search: "", role: "", region: "", denomination: "", min_church_size: 0, hours: "", status: "",
+  search: "", role: "", region: "", denomination: "", min_church_size: 0, hours: "", status: "", origin: "",
   country: "", remote: "", min_salary: 0, has_pay: false,
 };
 
@@ -53,7 +54,7 @@ function finding(filters, stats) {
   );
 }
 
-function Mark() {
+export function Mark() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
       <rect width="24" height="24" rx="6" fill="#141414" />
@@ -87,6 +88,7 @@ export default function App() {
   const [updating, setUpdating] = useState(true);
   const [error, setError] = useState(null);
   const [table, setTable] = useState(null);
+  const [openJob, setOpenJob] = useState(null);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -236,11 +238,21 @@ export default function App() {
                 <h2 id="h-postings">Postings</h2>
                 <span className="meta">{s ? `${count(s.postings)} matching · newest first` : ""}</span>
               </div>
-              <JobsTable rows={rows} onReady={setTable} />
+              <JobsTable rows={rows} onReady={setTable} onOpen={setOpenJob} />
             </section>
           </div>
         )}
       </main>
+      {openJob && (
+        <JobDetail
+          job={openJob}
+          onClose={() => {
+            // The table may redraw its rows while the dialog is open, so find the row again to return focus to it.
+            table?.getRow(openJob.post_uuid)?.getElement?.().querySelector("button.job-title")?.focus();
+            setOpenJob(null);
+          }}
+        />
+      )}
     </>
   );
 }

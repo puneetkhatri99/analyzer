@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { TabulatorFull as Tabulator } from "tabulator-tables";
 import "tabulator-tables/dist/css/tabulator.min.css";
-import { isoDate, listedPay } from "../format.js";
+import { ORIGINS, isoDate, listedPay } from "../format.js";
 
 function esc(s) {
   return (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -20,8 +20,8 @@ const COLUMNS = [
     formatter: (cell) => {
       const d = cell.getData();
       const title = esc(d.job_name || "Untitled role");
-      const link = d.post_url ? `<a class="job-title" href="${esc(d.post_url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="job-title">${title}</span>`;
-      return `${link}<div class="job-sub">${esc(d.company_name || "Employer not stated")}</div>`;
+      // A button so keyboard users can open the details too; the click bubbles to the row handler.
+      return `<button type="button" class="job-title">${title}</button><div class="job-sub">${esc(d.company_name || "Employer not stated")}</div>`;
     },
   },
   { title: "Role", field: "role", minWidth: 150, widthGrow: 1, responsive: 2 },
@@ -46,6 +46,11 @@ const COLUMNS = [
     },
     accessorDownload: (_v, d) => (d.status === "expired" ? `Expired ${isoDate(d.expired_at)}` : d.status === "open" ? "Open" : "Not verified"),
   },
+  {
+    title: "Added via", field: "origin", minWidth: 140, responsive: 2,
+    formatter: (c) => `<span class="origin" title="Added ${isoDate(c.getData().added_at)}">${esc(ORIGINS[c.getValue()] || c.getValue())}</span>`,
+    accessorDownload: (v) => ORIGINS[v] || v,
+  },
   { title: "Type", field: "hours", minWidth: 100, responsive: 3, formatter: (c) => esc(c.getValue()) || DASH },
   {
     title: "Posted", field: "first_indexed", minWidth: 110, responsive: 2, hozAlign: "right", headerHozAlign: "right",
@@ -55,7 +60,7 @@ const COLUMNS = [
   { title: "Link", field: "post_url", visible: false, download: true },
 ];
 
-export default function JobsTable({ rows, onReady }) {
+export default function JobsTable({ rows, onReady, onOpen }) {
   const el = useRef(null);
   const table = useRef(null);
   const built = useRef(false);
@@ -66,6 +71,7 @@ export default function JobsTable({ rows, onReady }) {
     const t = new Tabulator(el.current, {
       data: latest.current,
       columns: COLUMNS,
+      index: "post_uuid",
       layout: "fitColumns",
       responsiveLayout: "hide",
       pagination: true,
@@ -77,6 +83,7 @@ export default function JobsTable({ rows, onReady }) {
       initialSort: [{ column: "first_indexed", dir: "desc" }],
       columnDefaults: { headerSortTristate: false, resizable: false },
     });
+    t.on("rowClick", (_e, row) => onOpen?.(row.getData()));
     t.on("tableBuilt", () => {
       built.current = true;
       t.setData(latest.current);

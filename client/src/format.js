@@ -25,5 +25,13 @@ export function longDate(value) {
   return isNaN(d) ? "—" : d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// How a posting arrived (the API's `origin`).
+export const ORIGINS = {
+  feed: "JSON feed",
+  excel: "Excel import",
+  admin_page: "Admin · from page",
+  admin_web_search: "Admin · via web search",
+};
+
 // Rows with fewer paid postings than this are listed but not benchmarked.
 export const MIN_PAID = 5;

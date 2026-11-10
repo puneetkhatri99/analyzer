@@ -15,6 +15,17 @@ async function getJSON(path) {
   return res.json();
 }
 
+export async function postJSON(path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Request failed (${res.status})`);
+  return data;
+}
+
 export const fetchSources = () => getJSON("/api/sources");
 export const fetchFilterOptions = (source) => getJSON(`/api/filter-options?${toQuery({ source })}`);
 export const fetchSummary = (source, filters) => getJSON(`/api/summary?${toQuery({ source, ...filters })}`);
