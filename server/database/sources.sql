@@ -75,6 +75,9 @@ ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS added_via text NOT NULL DEFA
 ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS added_by  text;
 ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS added_via text NOT NULL DEFAULT 'excel';
 ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS added_by  text;
+-- Where a church size came from when it isn't in the posting (a web page found by the admin panel's lookup).
+ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS church_size_source text;
+ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS church_size_source text;
 -- backfill from checks made before these columns existed
 UPDATE church_jobs    SET last_live_at = fetched_at WHERE fetch_status = 'ok' AND last_live_at IS NULL;
 UPDATE church_jobs    SET expired_at   = fetched_at WHERE fetch_status = 'expired' AND expired_at IS NULL;
@@ -93,3 +96,20 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
     email       text NOT NULL REFERENCES admin_users(email) ON DELETE CASCADE,
     expires_at  timestamptz NOT NULL
 );
+
+-- One row per OpenAI call made by the admin panel, for the AI costs page. cost_usd is an estimate from the token
+-- counts OpenAI returns and list prices (app/admin.py PRICES); OpenAI's own billing page is the source of truth.
+CREATE TABLE IF NOT EXISTS ai_usage (
+    id             bigserial PRIMARY KEY,
+    created_at     timestamptz NOT NULL DEFAULT now(),
+    admin_email    text,
+    purpose        text NOT NULL,          -- extract | church_lookup
+    url            text,
+    model          text NOT NULL,
+    input_tokens   integer NOT NULL,
+    cached_tokens  integer NOT NULL DEFAULT 0,
+    output_tokens  integer NOT NULL,
+    web_searches   integer NOT NULL DEFAULT 0,
+    cost_usd       numeric(12, 6)          -- null when the model's price isn't known
+);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage (created_at);

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Mark } from "./App.jsx";
 import { postJSON } from "./api.js";
+import AiCosts from "./AiCosts.jsx";
 import { ORIGINS, count, listedPay } from "./format.js";
 
 const DATASETS = { churches: "BizDev churches", nonprofits: "BizDev nonprofits" };
@@ -100,7 +101,7 @@ function AddJob() {
   const save = () => {
     setBusy(true);
     setError(null);
-    postJSON("/api/admin/jobs", { url: result.url, dataset, method: result.method, job: result.job })
+    postJSON("/api/admin/jobs", { url: result.url, dataset, method: result.method, job: result.job, church_size_source: result.church_size_source })
       .then(() => setSaved(dataset))
       .catch((err) => setError(err.message))
       .finally(() => setBusy(false));
@@ -169,6 +170,8 @@ function AddJob() {
 
 export default function Admin() {
   const [email, setEmail] = useState(undefined); // undefined = checking, null = signed out
+  const [tab, setTab] = useState(window.location.hash === "#costs" ? "costs" : "add");
+  const showTab = (next) => { setTab(next); window.history.replaceState(null, "", next === "costs" ? "#costs" : window.location.pathname); };
 
   useEffect(() => {
     fetch("/api/admin/me").then((r) => (r.ok ? r.json() : null)).then((r) => setEmail(r?.email ?? null)).catch(() => setEmail(null));
@@ -191,7 +194,12 @@ export default function Admin() {
         </div>
       </header>
       <main className="canvas admin">
-        <AddJob />
+        <nav className="admin-tabs" aria-label="Admin sections">
+          {[["add", "Add a job"], ["costs", "AI costs"]].map(([key, label]) => (
+            <button key={key} type="button" className="admin-tab" aria-current={tab === key ? "page" : undefined} onClick={() => showTab(key)}>{label}</button>
+          ))}
+        </nav>
+        {tab === "add" ? <AddJob /> : <AiCosts />}
       </main>
     </>
   );

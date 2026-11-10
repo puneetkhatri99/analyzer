@@ -413,3 +413,25 @@ button.job-title { background: none; border: 0; padding: 0; font: inherit; font-
 .demo-login { border: 1px solid var(--notice-border); border-radius: var(--radius-control); padding: 10px 12px; display: flex;
   flex-direction: column; gap: 2px; font-size: 13px; }
 .demo-login code { font-family: ui-monospace, monospace; }
+
+/* ---------- Admin tabs and AI costs ---------- */
+.admin-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.admin-tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; font-weight: 500; color: var(--muted); cursor: pointer; margin-bottom: -1px; }
+.admin-tab:hover { color: var(--text); }
+.admin-tab[aria-current="page"] { color: var(--text); border-bottom-color: var(--text); }
+.admin.canvas { max-width: calc(1100px + 64px); }
+.cost-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+.plain-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.plain-table th { text-align: left; font-weight: 500; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.plain-table td { padding: 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.plain-table .r { text-align: right; }
+.nowrap { white-space: nowrap; }
+.table-scroll { overflow-x: auto; }
+.url-cell { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.url-cell a { color: var(--text); }
+@media (max-width: 720px) {
+  .cost-kpis { grid-template-columns: 1fr 1fr; }
+  .cost-kpis .kpi:nth-child(3) { border-left: 0; }
+  .cost-grid { grid-template-columns: 1fr; }
+}

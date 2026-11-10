@@ -27,7 +27,7 @@ _COLS = [
     "post_uuid", "job_name", "department", "hours", "seniority", "remote",
     "board_source", "post_url", "city", "region", "country", "company_name",
     "denomination", "church_size", "salary_min", "salary_max", "salary_period",
-    "first_indexed", "pull_date", "check_status", "last_live_at", "expired_at", "origin", "added_at",
+    "first_indexed", "pull_date", "check_status", "last_live_at", "expired_at", "origin", "added_at", "church_size_source",
 ]
 
 # Latest check of the job's URL (pipeline/fetch_jobs.py) -> what the dashboard shows.
@@ -42,7 +42,7 @@ _FEED_SQL = """
            p.seniority, p.remote, p.board_source, p.post_url, p.city, p.region, p.country,
            c.company_name, c.denomination, c.church_size,
            s.salary_min, s.salary_max, s.salary_period,
-           p.first_indexed, s.pull_date, k.check_status, k.last_live_at, k.expired_at, 'feed', p.created_at
+           p.first_indexed, s.pull_date, k.check_status, k.last_live_at, k.expired_at, 'feed', p.created_at, NULL
     FROM public.postings p
     LEFT JOIN public.companies c USING (company_uuid)
     LEFT JOIN public.posting_checks k USING (post_uuid)
@@ -60,7 +60,7 @@ _BIZDEV_SQL = """
     SELECT url_key, job_title, NULL, hours, NULL, remote, split_part(url_key, '/', 1), job_url,
            city, state, 'US', org_name, denomination, church_size,
            salary_min, salary_max, salary_period, date_posted, fetched_at::date,
-           fetch_status, last_live_at, expired_at, added_via, imported_at
+           fetch_status, last_live_at, expired_at, added_via, imported_at, church_size_source
     FROM public.{table}
 """
 

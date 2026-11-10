@@ -29,7 +29,14 @@ export default function JobDetail({ job, onClose }) {
     ["The employer", [
       ["Organization", job.company_name],
       ["Denomination", job.denomination],
-      ["Church size", job.church_size != null ? `${count(job.church_size)}+ weekly attendance` : null],
+      ["Church size", job.church_size != null ? (
+        <>
+          {count(job.church_size)}+ weekly attendance
+          {job.church_size_source && (
+            <> · <a href={job.church_size_source} target="_blank" rel="noopener noreferrer">found online</a></>
+          )}
+        </>
+      ) : null],
     ]],
     ["Record", [
       ["Date posted", job.first_indexed && longDate(job.first_indexed)],

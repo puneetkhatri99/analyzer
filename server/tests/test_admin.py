@@ -64,8 +64,25 @@ def _flow(monkeypatch):
         with get_conn() as conn:
             conn.execute("DELETE FROM public.church_jobs WHERE job_url = %s", (URL,))
 
+    # AI cost tracking: 10,000 input (2,000 cached) + 1,000 output tokens + 2 web searches on gpt-5.4-mini
+    fake = SimpleNamespace(usage=SimpleNamespace(input_tokens=10_000, output_tokens=1_000,
+                                                 input_tokens_details=SimpleNamespace(cached_tokens=2_000)),
+                           output=[SimpleNamespace(type="web_search_call")] * 2 + [SimpleNamespace(type="message")])
+    monkeypatch.setattr(admin, "OPENAI_MODEL", "gpt-5.4-mini")
+    try:
+        admin._record(fake, "extract", URL, EMAIL)
+        with get_conn() as conn:
+            cost = conn.execute("SELECT cost_usd FROM public.ai_usage WHERE url = %s", (URL,)).fetchone()[0]
+        assert float(cost) == round((8_000 * 0.75 + 2_000 * 0.075 + 1_000 * 4.50) / 1e6 + 0.02, 6)  # $0.03065
+        report = c.get("/api/admin/costs").json()
+        assert float(report["totals"]["total"]) >= float(cost) and any(r["url"] == URL for r in report["recent"])
+    finally:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM public.ai_usage WHERE url = %s", (URL,))
+
     token = c.cookies.get("admin_session")
     c.post("/api/admin/logout")
+    assert c.get("/api/admin/costs").status_code == 401
     assert c.get("/api/admin/me").status_code == 401
     assert TestClient(app, cookies={"admin_session": token}).get("/api/admin/me").status_code == 401  # revoked, not just forgotten
     for _ in range(5):
@@ -99,3 +116,22 @@ def test_password_hashing():
     h = admin.hash_password("admin@123")
     assert h.startswith("scrypt$") and "admin@123" not in h and h != admin.hash_password("admin@123")  # salted
     assert admin.verify_password("admin@123", h) and not admin.verify_password("admin@124", h)
+
+
+def test_church_lookup_rules():
+    job = admin.JobExtraction(page_type="job_posting", reason="r", category="church", job_title="Pastor", org_name="Grace Church",
+                              org_website=None, city="Austin", state="TX", country=None, date_posted=None, salary_min=None,
+                              salary_max=None, salary_period=None, hours=None, remote=None, denomination=None, church_size=None)
+    answer = lambda **f: SimpleNamespace(responses=SimpleNamespace(parse=lambda **kw: SimpleNamespace(output_parsed=admin.ChurchFacts(**f))))
+    # a size with no source is not accepted
+    j, src, _ = admin._lookup_church(answer(church_size=300, denomination=None, source_url=None, evidence=None), job)
+    assert j.church_size is None and src is None
+    # a sourced size is used, the missing denomination filled, and very large figures flagged
+    j, src, notes = admin._lookup_church(answer(church_size=6000, denomination="Baptist", source_url="https://grace.example/about",
+                                                evidence="6,000 each Sunday"), job)
+    assert j.church_size == 6000 and j.denomination == "Baptist" and src == "https://grace.example/about"
+    assert any("very large" in n for n in notes)
+    # a failed lookup never breaks extraction
+    def boom(**kw): raise TimeoutError
+    j, src, notes = admin._lookup_church(SimpleNamespace(responses=SimpleNamespace(parse=boom)), job)
+    assert j.church_size is None and "failed" in notes[0]
