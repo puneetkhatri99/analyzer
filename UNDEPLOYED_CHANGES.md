@@ -172,7 +172,7 @@ If the code is pushed before Neon has `posting_checks`, every dashboard request 
 | `DATA_REPORT.md` lacks the expiry numbers | The report is out of date on job status |
 | Feed pay outliers not cleaned | 17 feed postings work out under $15k a year and 15 over $250k (mislabeled hourly/weekly pay, physician roles) |
 | Duplicate denomination names not merged | e.g. Catholic / Roman Catholic, so each denomination's count is split |
-| AI role classification never run | 479 feed jobs are "Other"; it needs `ANTHROPIC_API_KEY` |
+| Roles come from keyword rules only | 479 feed jobs are "Other"; extend the rules in `server/app/roles.py` |
 | No private leads view | The contact data is in the database but not shown anywhere; showing it would need a login |
 | Neon password not rotated | Raised earlier and still open |
 

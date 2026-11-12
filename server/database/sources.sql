@@ -69,7 +69,7 @@ ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS last_live_at timestamptz;
 ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS expired_at   timestamptz;
 ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS last_live_at timestamptz;
 ALTER TABLE nonprofit_jobs ADD COLUMN IF NOT EXISTS expired_at   timestamptz;
--- How each job arrived: 'excel' (the import; existing rows get it too), 'admin_page' or 'admin_web_search'
+-- How each job arrived: 'excel' (the import; existing rows get it too), 'collector' (pipeline.collect_jobs), 'admin_page' or 'admin_web_search'
 -- (added in the admin panel, read from the page itself or via AI web search). added_by: the admin's email, for audit.
 ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS added_via text NOT NULL DEFAULT 'excel';
 ALTER TABLE church_jobs    ADD COLUMN IF NOT EXISTS added_by  text;

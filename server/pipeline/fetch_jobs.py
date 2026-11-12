@@ -11,6 +11,7 @@ A site that blocks 10 requests in a row is skipped for the rest of the run; its 
 """
 import argparse
 import json
+import logging
 import re
 import threading
 import time
@@ -22,8 +23,10 @@ import requests
 from bs4 import BeautifulSoup
 
 from app.db import get_conn
+from app.logs import script_log
 from pipeline.import_bizdev import TABLES
 
+log = logging.getLogger("fetch_jobs")
 TIMEOUT = 15
 HOST_DELAY = 1.0           # seconds between requests to the same site
 MAX_BLOCKED_IN_A_ROW = 10
@@ -157,6 +160,22 @@ def parse_page(html, org_name):
             out["hours"] = EMPLOYMENT_TYPES.get(str(et).upper().replace("-", "_"))
         if str(jp.get("jobLocationType", "")).upper() == "TELECOMMUTE":
             out["remote"] = "true"
+        # Who, where and when: used by pipeline.collect_jobs for pages it found itself.
+        org = jp.get("hiringOrganization")
+        loc = jp.get("jobLocation")
+        loc = loc[0] if isinstance(loc, list) and loc else loc
+        addr = loc.get("address") if isinstance(loc, dict) else None
+        if isinstance(addr, str):  # some boards give one line: "Lincolnton, GA, 30817, US"
+            out.setdefault("place", addr.strip())
+        addr = addr if isinstance(addr, dict) else {}
+        country = addr.get("addressCountry")
+        for key, value in (("title", jp.get("title")), ("org", org.get("name") if isinstance(org, dict) else org),
+                           ("org_website", org.get("url") if isinstance(org, dict) else None),
+                           ("city", addr.get("addressLocality")), ("state", addr.get("addressRegion")),
+                           ("country", country.get("name") if isinstance(country, dict) else country),
+                           ("date_posted", jp.get("datePosted"))):
+            if value and isinstance(value, str) and key not in out:
+                out[key] = value.strip()
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     text = " ".join(soup.get_text(" ").split())
@@ -210,22 +229,33 @@ def fetch_one(url, org_name):
     """Returns (fetch_status, parsed fields)."""
     url = url if url.startswith("http") else "https://" + url
     if ".myworkdayjobs.com/" in url:
-        return check_workday(url)
+        status, page = check_workday(url)
+        log.debug("GET %s -> %s (Workday job API)", url, status)
+        return status, page
+    t = time.time()
     try:
         r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-    except requests.RequestException:
+    except requests.RequestException as e:
+        log.debug("GET %s -> error: no answer (%s)", url, e.__class__.__name__)
         return "error", {}
+    took = f"HTTP {r.status_code}, {len(r.content):,} bytes, {time.time() - t:.1f}s"
     if r.status_code in (404, 410):
+        log.debug("GET %s -> expired (%s: page gone)", url, took)
         return "expired", {}
     if r.status_code in (401, 403, 429, 503) or (r.status_code == 200 and BLOCKED_RE.search(r.text[:3000]) and len(r.text) < 30000):
+        log.debug("GET %s -> blocked (%s%s)", url, took, ", bot-check page" if r.status_code == 200 else "")
         return "blocked", {}
     if r.status_code >= 400:
+        log.debug("GET %s -> error (%s)", url, took)
         return "error", {}
     page = parse_page(r.text, org_name)
     if EXPIRED_RE.search(page["text"][:5000]) and not page["salary"]:
+        log.debug("GET %s -> expired (%s, page says the job is closed)", url, took)
         return "expired", page
     if len(page["text"]) < 400 and not page["structured"]:
+        log.debug("GET %s -> unknown (%s, JavaScript-only page: open or closed can't be told)", url, took)
         return "unknown", page  # a JavaScript shell (Paycom, ADP, HRM Direct...): open or closed can't be told
+    log.debug("GET %s -> ok (%s, %s)", url, took, "structured job data" if page["structured"] else "text only")
     return "ok", page
 
 
@@ -275,13 +305,16 @@ def main():
     else:
         where = f"{status_col} IS NULL" + (f" OR {status_col} IN ('blocked', 'error')" if args.retry else "")
     sql = (SELECT["json"] if is_feed else SELECT["excel"]).format(table=table, where=where)
+    script_log("fetch_jobs")
+    log.info("%s: %s", table, "re-checking every job not yet expired" if args.recheck else
+             "reading jobs not read yet" + (", plus blocked and failed ones" if args.retry else ""))
     with get_conn() as conn:
         rows = conn.execute(sql + " ORDER BY random()" + (f" LIMIT {int(args.limit)}" if args.limit else "")).fetchall()
 
     by_host = defaultdict(list)
     for r in rows:
         by_host[urlsplit(r[1] if r[1].startswith("http") else "https://" + r[1]).netloc.lower()].append(r)
-    print(f"{table}: fetching {len(rows)} pages from {len(by_host)} sites")
+    log.info("%s: fetching %d pages from %d sites", table, len(rows), len(by_host))
 
     tally = defaultdict(int)
     lock = threading.Lock()
@@ -300,22 +333,26 @@ def main():
                 params = {"status": status, "key": key, "lo": lo, "hi": hi, "period": period,
                           **{f: page.get(f) for f in ("hours", "remote", "denomination", "church_size")}}
                 conn.execute(UPSERT_FEED if is_feed else UPDATE.format(table=table), params)
+                log.debug("%s %s | %s | pay %s | %s | %s | size %s", status, url, org or "-",
+                          f"{lo:g}-{hi:g}/{period}" if lo is not None else "-", params["hours"] or "-",
+                          params["denomination"] or "-", params["church_size"] or "-")
                 with lock:
                     tally[status] += 1
                     tally["with pay"] += bool(page.get("salary"))
                     done = sum(tally[s] for s in ("ok", "expired", "unknown", "blocked", "error"))
                     if done % 50 == 0:
-                        print(f"  {done}/{len(rows)} {dict(tally)}", flush=True)
+                        log.info("  %d/%d %s", done, len(rows), dict(tally))
                 time.sleep(HOST_DELAY)
 
     with ThreadPoolExecutor(args.workers) as pool:
         # biggest sites first so the long queues start early
         for host, items in sorted(by_host.items(), key=lambda p: -len(p[1])):
-            pool.submit(run_host, host, items).add_done_callback(lambda f: f.exception() and print('  worker failed:', f.exception()))
+            pool.submit(run_host, host, items).add_done_callback(
+                lambda f: f.exception() and log.error("A worker stopped", exc_info=f.exception()))
 
-    print(f"{table}: done {dict(tally)}")
+    log.info("%s: done %s", table, dict(tally))
     for host, n in skipped_hosts.items():
-        print(f"  skipped {n} rows on {host}: it blocked {MAX_BLOCKED_IN_A_ROW} requests in a row")
+        log.warning("Skipped %d rows on %s: it blocked %d requests in a row", n, host, MAX_BLOCKED_IN_A_ROW)
 
 
 if __name__ == "__main__":

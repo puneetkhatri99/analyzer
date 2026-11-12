@@ -31,6 +31,7 @@ export const ORIGINS = {
   excel: "Excel import",
   admin_page: "Admin · from page",
   admin_web_search: "Admin · via web search",
+  collector: "Auto-collected",
 };
 
 // Rows with fewer paid postings than this are listed but not benchmarked.

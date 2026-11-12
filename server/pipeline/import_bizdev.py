@@ -8,6 +8,7 @@ Every tab is read (the main sheet and the weekly tabs) and rows are merged by jo
 Re-running updates the Excel columns and leaves the fetched columns alone.
 """
 import argparse
+import logging
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -15,7 +16,9 @@ from urllib.parse import urlsplit
 import openpyxl
 
 from app.db import get_conn
+from app.logs import script_log
 
+log = logging.getLogger("import_bizdev")
 TABLES = {"churches": "church_jobs", "nonprofits": "nonprofit_jobs"}
 SCHEMA = Path(__file__).resolve().parent.parent / "database" / "sources.sql"
 
@@ -87,8 +90,10 @@ def main():
     ap.add_argument("xlsx")
     args = ap.parse_args()
     table = TABLES[args.kind]
+    script_log("import_bizdev")  # counts only: the sheets' contact names and emails are never logged
 
     rows = read_rows(args.xlsx)
+    log.info("Read %d distinct jobs (merged by job URL) from every tab of %s", len(rows), args.xlsx)
     fields = ["url_key", *HEADERS, "sheets"]
     updates = ", ".join(f"{f} = EXCLUDED.{f}" for f in fields if f != "url_key")
     sql = (f"INSERT INTO public.{table} ({', '.join(fields)}) VALUES ({', '.join(['%s'] * len(fields))}) "
@@ -99,7 +104,7 @@ def main():
         with conn.cursor() as cur:
             cur.executemany(sql, [[r[f] for f in fields] for r in rows.values()])
         total = conn.execute(f"SELECT count(*) FROM public.{table}").fetchone()[0]
-    print(f"{table}: upserted {len(rows)} jobs from {args.xlsx}; table now has {total} rows")
+    log.info("%s: upserted %d jobs from %s; table now has %d rows", table, len(rows), args.xlsx, total)
 
 
 if __name__ == "__main__":

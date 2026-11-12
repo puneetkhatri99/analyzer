@@ -1,15 +1,52 @@
+import logging
+import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import admin, jobs
 from app.config import ALLOWED_ORIGIN
+from app.logs import api_log
 
-app = FastAPI(title="Ministry Jobs Analytics API")
+log = logging.getLogger("api")
+
+
+@asynccontextmanager
+async def lifespan(_):
+    api_log()  # on server start, not on import, so the tests don't write into the real log files
+    log.info("API started")
+    yield
+    log.info("API stopped")
+
+
+app = FastAPI(title="Ministry Jobs Analytics API", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """One line per request (method, path and query, status, time, visitor IP); a crash is logged with its traceback.
+    Bodies and cookies are never logged, so passwords and session tokens stay out of the log."""
+    start = time.perf_counter()
+    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "?").split(",")[0].strip()
+    path = request.url.path + (f"?{request.url.query}" if request.url.query else "")
+    fields = {"method": request.method, "path": request.url.path, "query": request.url.query or None, "ip": ip}
+    try:
+        response = await call_next(request)
+    except Exception:
+        ms = round((time.perf_counter() - start) * 1000)
+        log.exception("%s %s -> crashed after %d ms (%s)", request.method, path, ms, ip, extra={**fields, "status": 500, "ms": ms})
+        raise
+    ms = round((time.perf_counter() - start) * 1000)
+    level = logging.WARNING if response.status_code >= 400 else logging.INFO
+    # extra= fields become their own columns in Axiom, so requests can be charted by path, status and time
+    log.log(level, "%s %s -> %s in %d ms (%s)", request.method, path, response.status_code, ms, ip,
+            extra={**fields, "status": response.status_code, "ms": ms})
+    return response
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,7 +63,7 @@ def job_filters(
     country: Optional[str] = None,
     hours: Optional[str] = None,
     status: Optional[Literal["open", "expired", "unverified"]] = None,
-    origin: Optional[Literal["feed", "excel", "admin"]] = None,
+    origin: Optional[Literal["feed", "excel", "admin", "collector"]] = None,
     remote: Optional[str] = None,
     search: Optional[str] = None,
     has_pay: bool = False,

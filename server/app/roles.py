@@ -1,26 +1,6 @@
 import re
 
-# Fixed taxonomy for LLM title classification (pipeline/enrich.py). The LLM must
-# pick one of these for every raw job title -- it never invents a new label.
-CANONICAL_ROLES = [
-    "Senior/Lead Pastor",
-    "Associate Pastor",
-    "Executive Pastor",
-    "Worship/Music Pastor",
-    "Youth/Student Pastor",
-    "Children's Pastor",
-    "Missions Pastor",
-    "Discipleship/Teaching Pastor",
-    "Chaplain",
-    "Administrative/Operations",
-    "Communications/Media",
-    "Facilities",
-    "Finance",
-    "Other",
-]
-
-# Keyword fallback used by the API while LLM classification hasn't run.
-# Order matters: the first matching pattern wins.
+# A job's role, from keywords in its title. Order matters: the first matching pattern wins.
 ROLE_RULES = [
     (r"senior pastor|lead pastor|head pastor|solo pastor", "Senior/Lead Pastor"),
     (r"executive pastor", "Executive Pastor"),

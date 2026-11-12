@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import logging
 import re
 import secrets
 import socket
@@ -23,6 +24,7 @@ from pipeline.fetch_jobs import BLOCKED_RE, DENOMINATIONS, HEADERS, _job_posting
 from pipeline.import_bizdev import url_key
 
 router = APIRouter(prefix="/api/admin")
+log = logging.getLogger("admin")  # an audit trail of admin actions: who signed in, what was extracted and saved
 
 COOKIE = "admin_session"
 SESSION_SECONDS = 12 * 3600
@@ -78,18 +80,22 @@ def login(body: Login, request: Request, response: Response):
     ip = request.client.host if request.client else "?"
     recent = [t for t in _failures.get(ip, []) if t > time.time() - FAILURE_WINDOW]
     if len(recent) >= MAX_FAILURES:
+        log.warning("Sign-in refused: %d failed attempts from %s in 15 minutes", len(recent), ip)
         raise HTTPException(429, "Too many failed attempts. Try again in 15 minutes.")
     email = body.email.strip().lower()
     with get_conn() as conn:
         row = conn.execute("SELECT password_hash FROM public.admin_users WHERE email = %s", (email,)).fetchone()
         if not verify_password(body.password, row[0] if row else _DUMMY_HASH) or not row:
             _failures[ip] = recent + [time.time()]
+            log.warning("Failed sign-in for %s from %s (%s; attempt %d of %d)", email, ip,
+                        "wrong password" if row else "no such admin", len(recent) + 1, MAX_FAILURES)
             raise HTTPException(401, "Incorrect email or password")
         token = secrets.token_urlsafe(32)
         conn.execute("DELETE FROM public.admin_sessions WHERE expires_at < now()")
         conn.execute("INSERT INTO public.admin_sessions (token_hash, email, expires_at) VALUES (%s, %s, now() + %s * interval '1 second')",
                      (_token_hash(token), email, SESSION_SECONDS))
     _failures.pop(ip, None)
+    log.info("Signed in: %s from %s", email, ip)
     response.set_cookie(COOKIE, token, max_age=SESSION_SECONDS, httponly=True, samesite="strict",
                         secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https")
     return {"email": email}
@@ -100,7 +106,8 @@ def logout(request: Request, response: Response):
     token = request.cookies.get(COOKIE)
     if token:
         with get_conn() as conn:
-            conn.execute("DELETE FROM public.admin_sessions WHERE token_hash = %s", (_token_hash(token),))
+            row = conn.execute("DELETE FROM public.admin_sessions WHERE token_hash = %s RETURNING email", (_token_hash(token),)).fetchone()
+        log.info("Signed out: %s", row[0] if row else "(session had already ended)")
     response.delete_cookie(COOKIE)
     return {"ok": True}
 
@@ -293,13 +300,15 @@ def _record(response, purpose: str, url: str, admin_email: Optional[str]) -> Non
     cost = None if price is None else round(
         ((usage.input_tokens - cached) * price[0] + cached * price[1] + usage.output_tokens * price[2]) / 1e6
         + searches * WEB_SEARCH_PRICE, 6)
+    log.info("AI call (%s) for %s: %s, %d tokens in (%d cached), %d out, %d web searches, cost %s", purpose, url, OPENAI_MODEL,
+             usage.input_tokens, cached, usage.output_tokens, searches, "unknown" if cost is None else f"${cost:.4f}")
     try:
         with get_conn() as conn:
             conn.execute("""INSERT INTO public.ai_usage (admin_email, purpose, url, model, input_tokens, cached_tokens,
                             output_tokens, web_searches, cost_usd) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                          (admin_email, purpose, url, OPENAI_MODEL, usage.input_tokens, cached, usage.output_tokens, searches, cost))
     except Exception:
-        pass  # losing one usage row is better than failing the admin's extraction
+        log.exception("Couldn't store the AI usage row for %s", url)  # losing one row is better than failing the extraction
 
 
 def _lookup_church(client: OpenAI, job: "JobExtraction", url: str = "", admin_email: Optional[str] = None
@@ -314,10 +323,13 @@ def _lookup_church(client: OpenAI, job: "JobExtraction", url: str = "", admin_em
         _record(response, "church_lookup", url, admin_email)
         facts = response.output_parsed
     except Exception as e:
+        log.exception("Church size lookup failed for %s (%s)", job.org_name, url)
         return job, None, [f"Church size lookup failed ({e.__class__.__name__})."]
     source = facts.source_url if facts and facts.source_url and re.match(r"https?://[^\s]+$", facts.source_url) else None
     if not facts or facts.church_size is None or not source:
+        log.info("Church size lookup for %s: not found online", job.org_name)
         return job, None, ["Church size isn't stated in the posting, and no source online states the church's attendance."]
+    log.info("Church size lookup for %s: %s weekly, from %s", job.org_name, f"{facts.church_size:,}", source)
     update = {"church_size": facts.church_size}
     if not job.denomination and facts.denomination:
         update["denomination"] = facts.denomination
@@ -337,8 +349,10 @@ def extract(body: ExtractRequest, admin_email: str = Depends(require_admin)):
     if not OPENAI_API_KEY:
         raise HTTPException(503, "OPENAI_API_KEY is not set on the server")
     url = str(body.url)
+    log.info("Extract requested by %s: %s", admin_email, url)
     _check_public_url(url)
     page = _read_page(url)
+    log.info("Page %s: %s", url, f"read directly ({len(page):,} characters)" if page else "unreadable (blocked or JavaScript-only), using web search")
     warnings = []
     if page:
         method = "page"
@@ -356,8 +370,10 @@ def extract(body: ExtractRequest, admin_email: str = Depends(require_admin)):
         result = client.responses.parse(model=OPENAI_MODEL, instructions=INSTRUCTIONS, text_format=JobExtraction, **request)
         _record(result, "extract", url, admin_email)
     except Exception as e:  # network, quota, invalid key...
+        log.exception("AI extraction failed for %s", url)
         raise HTTPException(502, f"The AI service failed: {e.__class__.__name__}")
     if result.output_parsed is None:
+        log.error("AI extraction for %s returned no result", url)
         raise HTTPException(502, "The AI service returned no result")
     job, checks = validate(result.output_parsed, page)
     church_size_source = None
@@ -367,6 +383,10 @@ def extract(body: ExtractRequest, admin_email: str = Depends(require_admin)):
         if job.church_size is None:
             church_size_source = None
         warnings += notes
+    log.info("Extracted %s via %s: %s | %s | %s | %s | %s%s", url, method, job.page_type, job.job_title, job.org_name,
+             ", ".join(x for x in (job.city, job.state) if x) or "no location",
+             f"{job.salary_min}-{job.salary_max}/{job.salary_period}" if job.salary_min else "no pay",
+             "".join(f"\n    warning: {w}" for w in warnings + checks))
     return {"url": url, "method": method, "job": job.model_dump(), "church_size_source": church_size_source,
             "warnings": warnings + checks}
 
@@ -408,6 +428,7 @@ def save(body: SaveRequest, admin_email: str = Depends(require_admin)):
                     sheets = CASE WHEN 'Added by admin' = ANY(t.sheets) THEN t.sheets ELSE array_append(t.sheets, 'Added by admin') END""",
             {**row, "url_key": url_key(url), "job_url": url, "added_via": f"admin_{body.method}", "added_by": admin_email},
         )
+    log.info("Saved by %s to %s: %s | %s | %s", admin_email, table, job.job_title, job.org_name, url)
     return {"saved": True, "dataset": body.dataset}
 
 

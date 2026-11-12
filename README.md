@@ -46,6 +46,16 @@ python -m pipeline.fetch_jobs churches     # reads each job page for pay, job ty
 python -m pipeline.fetch_jobs nonprofits   # add --retry to re-try blocked/failed pages
 ```
 
+**Collecting new church jobs automatically** (from `server/`). Finds new US church jobs on the sites that allow it and adds
+them to the BizDev churches tab as "Auto-collected". [COLLECTOR_HOW_IT_WORKS.md](COLLECTOR_HOW_IT_WORKS.md) explains how; [COLLECTOR_GAPS.md](COLLECTOR_GAPS.md) lists what it leaves out. Safe to run daily:
+
+```bash
+python -m pipeline.collect_jobs --dry-run          # see what's new, save nothing
+python -m pipeline.collect_jobs                    # read and save every new job
+python -m pipeline.collect_jobs --source sbc --limit 50
+# every run logs to server/logs/ and ends with a PROBLEMS list (site changed / blocked / site down)
+```
+
 **Tracking expired jobs** (from `server/`). Each check records whether a job's page is still open:
 
 ```bash
@@ -78,6 +88,26 @@ cp .env.example .env
 npm install
 npm run dev                               # http://localhost:5173
 ```
+
+## Logs
+
+Everything logs to files in `server/logs/` (git-ignored), and to the screen. Set up in [server/app/logs.py](server/app/logs.py).
+
+| Log file | What's in it |
+|---|---|
+| `api.log` (new file each midnight, 30 days kept) | Every request: method, path, status, time, IP. Every error with its traceback. Admin actions: sign-ins and failed sign-ins, URLs extracted and what was found, AI calls and their cost, church size lookups, jobs saved and by whom |
+| `<script>-<date>-<time>.log`, one per run | Every pipeline script (`collect_jobs`, `fetch_jobs`, `ingest`, `import_bizdev`, `push_data`, `create_admin`): settings, every page fetched (status, size, time), every row's outcome, the summary, and a crash's traceback |
+
+The screen shows the main lines; the files hold every detail. Passwords, session tokens, the database password and
+the spreadsheets' contact names and emails are never logged. On Render the disk is wiped on each deploy, so `api.log`
+only lasts until the next deploy there.
+
+**Axiom.** When `AXIOM_TOKEN` is set (in `server/.env` locally, in Render's environment settings in production), every
+log line is also sent to the Axiom dataset `AXIOM_DATASET` (default `analyzer`) at [axiom.co](https://axiom.co), where it's
+kept, searchable and chartable. A background thread sends batches every 2 seconds, so requests never wait on Axiom; if
+Axiom is unreachable the lines are skipped and the files still have them. Fields: `_time`, `level`, `logger`, `message`,
+`app` (`api` or the script), `run`, `env` (`local`/`render`), `exception`, and per request `method`, `path`, `status`,
+`ms`, `ip`. The collector also sends one `event = "source_summary"` row per source per run, and `event = "problem"` rows.
 
 ## Admin panel
 
