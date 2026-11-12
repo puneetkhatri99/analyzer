@@ -187,7 +187,7 @@ export default function Admin() {
         <div className="topbar-inner">
           <div className="brand"><Mark />Ministry Jobs Analyser <span className="muted">· Admin</span></div>
           <div className="topbar-actions">
-            <a href="/">Dashboard</a>
+            <a href="/">Analyser</a>
             <span className="muted">{email}</span>
             <button type="button" className="link-btn" onClick={signOut}>Sign out</button>
           </div>

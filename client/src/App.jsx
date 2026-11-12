@@ -140,7 +140,10 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-inner">
           <div className="brand"><Mark />Ministry Jobs Analyser</div>
-          <div className="freshness">{current?.label || "…"} · {source === "json" ? "data as of" : "pages last read"} {s?.as_of ? longDate(s.as_of) : "…"}</div>
+          <div className="topbar-actions">
+            <div className="freshness">{current?.label || "…"} · {source === "json" ? "data as of" : "pages last read"} {s?.as_of ? longDate(s.as_of) : "…"}</div>
+            <a className="btn" href="/admin">Admin</a>
+          </div>
         </div>
       </header>
 

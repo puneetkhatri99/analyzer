@@ -375,6 +375,7 @@ button.list-row:hover { background: var(--hover); }
 .form-error { margin: 0; color: var(--negative); font-size: 13px; }
 .topbar-actions { display: flex; align-items: center; gap: 16px; font-size: 13px; }
 .topbar-actions a, .save-row a { color: var(--text); font-weight: 500; }
+.topbar-actions a.btn { text-decoration: none; }
 .admin { max-width: calc(860px + 64px); display: flex; flex-direction: column; gap: var(--gap); }
 .url-form { display: flex; gap: 8px; }
 .url-form .control { flex: 1; min-width: 0; }
