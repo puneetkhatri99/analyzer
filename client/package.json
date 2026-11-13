@@ -9,18 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tanstack/react-table": "^9.3.1",
-    "chart.js": "^4.4.4",
+    "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "lucide-react": "^1.72.0",
     "radix-ui": "^1.8.1",
     "react": "^18.3.1",
-    "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.3.1",
     "recharts": "^3.8.0",
-    "tabulator-tables": "^6.3.0",
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {

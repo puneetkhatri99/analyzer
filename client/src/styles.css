@@ -53,10 +53,13 @@ body {
   font: 400 var(--fs-body)/20px var(--font);
   -webkit-font-smoothing: antialiased;
 }
-button, input, select { font: inherit; color: inherit; }
 .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--ink-muted); }
-:focus-visible { outline: 2px solid var(--hue); outline-offset: 2px; }
+/* element-wide defaults sit in the base layer, so shadcn's utility classes can override them */
+@layer base {
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--hue); outline-offset: 2px; }
+}
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------- Top bar ---------- */
@@ -77,7 +80,6 @@ button, input, select { font: inherit; color: inherit; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; white-space: nowrap; }
 .brand svg { flex: none; }
 .brand-logo { height: 22px; width: auto; display: block; }
-.freshness { color: var(--ink-muted); font-size: var(--fs-small); white-space: nowrap; }
 
 /* ---------- Canvas ---------- */
 .canvas {
@@ -100,6 +102,7 @@ button, input, select { font: inherit; color: inherit; }
   gap: 2px;
   min-width: 0;
 }
+.source { align-items: flex-start; color: var(--text); }
 .source:hover { border-color: #bdbdbd; }
 .source[aria-selected="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); cursor: default; }
 .source-label { font-weight: 600; font-size: 15px; }
@@ -117,74 +120,30 @@ button, input, select { font: inherit; color: inherit; }
 .finding strong { color: var(--text); font-weight: 600; }
 
 /* ---------- Buttons ---------- */
-.btn {
-  height: var(--control-height);
-  padding: 0 14px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--control);
-  background: var(--surface);
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex; align-items: center; gap: 8px;
-  white-space: nowrap;
-  transition: background 120ms ease, border-color 120ms ease;
-}
-.btn:hover { background: var(--hover); border-color: #bdbdbd; }
-.btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-.btn-primary:hover { background: #2a2a2a; border-color: #2a2a2a; }
-.btn:disabled { cursor: not-allowed; color: var(--ink-muted); background: var(--raised); border-color: var(--raised); }
-.link-btn { background: none; border: 0; padding: 0; color: var(--text); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--control); cursor: pointer; }
-.link-btn:hover { text-decoration-color: var(--text); }
 
 /* ---------- Filters ---------- */
 .filters { margin-bottom: 16px; }
 .filter-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.control {
-  height: var(--control-height);
-  border: 1px solid var(--control);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  padding: 0 10px;
-  min-width: 0;
-}
-.control:hover { border-color: #bdbdbd; }
-select.control { padding-right: 28px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236b6b6b' stroke-width='1.5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; cursor: pointer; }
-select.control.is-set { border-color: var(--text); }
-.filter-row select.control, .more-row select.control { width: 164px; text-overflow: ellipsis; }
+
 .search { position: relative; flex: 1 1 236px; max-width: 300px; }
 .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--ink-muted); pointer-events: none; }
 .search input { width: 100%; padding-left: 34px; }
 .search input::placeholder { color: var(--ink-muted); }
 .more-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
-.check { display: inline-flex; align-items: center; gap: 8px; height: var(--control-height); padding: 0 4px; cursor: pointer; white-space: nowrap; }
-.check input { width: 16px; height: 16px; accent-color: var(--primary); margin: 0; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
-.chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 26px; padding: 0 6px 0 10px;
-  border-radius: 999px; background: var(--raised); color: #3d3d3d;
-  font-size: 13px; border: 0; cursor: pointer; white-space: nowrap;
-}
-.chip:hover { background: #e2e1de; }
-.chip b { font-weight: 500; color: var(--text); }
-.chip svg { color: var(--ink-muted); }
+
 .filters-toggle { display: none; }
 
 /* ---------- Cards ---------- */
-.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--gap); align-items: start; transition: opacity 150ms ease; }
-.grid.is-updating { opacity: 0.55; }
+.dash-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--gap); align-items: start; transition: opacity 150ms ease; }
+.dash-grid.is-updating { opacity: 0.55; }
 .span-12 { grid-column: span 12; }
 .span-7 { grid-column: span 7; }
 .span-5 { grid-column: span 5; }
 .stack { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
 /* the histogram grows to its row-mate's height, so that row always ends level */
-.card.fill { align-self: stretch; }
 
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--pad); min-width: 0; display: flex; flex-direction: column; }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.card-head h2 { font-size: var(--fs-section); line-height: 24px; font-weight: 600; margin: 0; }
-.card-head .meta { color: var(--ink-muted); font-size: var(--fs-small); white-space: nowrap; }
 .card-note { color: var(--ink-muted); font-size: var(--fs-small); line-height: 18px; margin: 12px 0 0; }
 .card-foot { margin-top: auto; padding-top: 12px; }
 
@@ -259,50 +218,17 @@ button.list-row:hover { background: var(--hover); }
 .chart-box { position: relative; flex: 1; min-height: 260px; }
 
 /* ---------- Notices, states ---------- */
-.notice { background: var(--notice-bg); border: 1px solid var(--notice-border); color: var(--notice-ink); border-radius: var(--radius-control); padding: 10px 14px; font-size: 13px; }
-.error-card { padding: 28px var(--pad); display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
-.skeleton { display: inline-block; background: var(--raised); border-radius: 4px; color: transparent; }
+
 .empty-line { border: 1px dashed var(--control); border-radius: var(--radius-card); padding: 10px 14px; color: var(--ink-muted); font-size: 13px; }
 
 /* ---------- Table (Tabulator, restyled to rules and alignment) ----------
    Scoped under .table-card: Tabulator's stylesheet loads later with the admin bundle, so these must win on specificity. */
-.table-card { padding: 0; }
-.table-card .card-head { padding: var(--pad) var(--pad) 0; margin-bottom: 8px; }
-.table-card .tabulator { border: 0; background: transparent; font-size: var(--fs-body); font-family: var(--font); }
-.table-card .tabulator .tabulator-header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--ink-muted); font-weight: 400; }
-.table-card .tabulator .tabulator-header .tabulator-col { background: var(--surface); border-right: 0; }
-.table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: 10px 12px; }
-.table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-title { font-size: var(--fs-small); font-weight: 400; }
-.table-card .tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover { background: var(--hover); }
-.table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter .tabulator-arrow { border-bottom-color: transparent; }
-.table-card .tabulator .tabulator-header .tabulator-col[aria-sort="ascending"] .tabulator-col-sorter .tabulator-arrow { border-bottom-color: var(--text); }
-.table-card .tabulator .tabulator-header .tabulator-col[aria-sort="descending"] .tabulator-col-sorter .tabulator-arrow { border-top-color: var(--text); }
-.table-card .tabulator .tabulator-header .tabulator-col.col-right .tabulator-col-title { text-align: right; }
-.table-card .tabulator .tabulator-tableholder { background: var(--surface); }
-.table-card .tabulator .tabulator-tableholder .tabulator-table { background: var(--surface); color: var(--text); }
-.table-card .tabulator-row { background: var(--surface); border-bottom: 1px solid var(--rule); min-height: 52px; }
-.table-card .tabulator-row.tabulator-row-even { background: var(--surface); }
-.table-card .tabulator-row.tabulator-selectable:hover, .table-card .tabulator-row:hover { background: var(--hover) !important; }
-.table-card .tabulator-row .tabulator-cell { border-right: 0; padding: 9px 12px; }
-.table-card .tabulator-row .tabulator-cell.col-right { text-align: right; }
-.table-card .tabulator .tabulator-placeholder .tabulator-placeholder-contents { color: var(--ink-muted); font-size: var(--fs-body); font-weight: 400; padding: 40px 0; }
+
 .job-title { color: var(--text); font-weight: 500; text-decoration: none; }
 .job-title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .job-sub { color: var(--ink-muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
 .pay-unit { color: var(--ink-muted); font-size: 12px; margin-left: 2px; }
 .dash { color: var(--ink-muted); }
-.table-card .tabulator .tabulator-footer { background: var(--surface); border-top: 1px solid var(--border); color: var(--ink-muted); padding: 10px 16px; border-radius: 0 0 var(--radius-card) var(--radius-card); font-weight: 400; }
-.table-card .tabulator .tabulator-footer .tabulator-page-counter { color: var(--ink-muted); font-weight: 400; }
-.table-card .tabulator .tabulator-footer .tabulator-page-size { border: 1px solid var(--control); border-radius: var(--radius-control); padding: 4px 6px; background: var(--surface); color: var(--text); }
-.table-card .tabulator .tabulator-footer .tabulator-paginator { color: var(--ink-muted); }
-.table-card .tabulator .tabulator-footer .tabulator-page {
-  border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--surface); color: var(--text);
-  padding: 4px 10px; margin: 0 2px; font-weight: 500;
-}
-.table-card .tabulator .tabulator-footer .tabulator-page:not(.disabled):hover { background: var(--hover); color: var(--text); cursor: pointer; }
-.table-card .tabulator .tabulator-footer .tabulator-page.active { background: var(--primary); border-color: var(--primary); color: #fff; }
-.table-card .tabulator .tabulator-footer .tabulator-page:disabled { opacity: 0.4; }
-.table-card .tabulator .tabulator-footer .tabulator-footer-contents { flex-wrap: wrap; gap: 8px; }
 
 /* ---------- Tablet ---------- */
 @media (max-width: 1100px) {
@@ -316,18 +242,20 @@ button.list-row:hover { background: var(--hover); }
 /* ---------- Phone ---------- */
 @media (max-width: 720px) {
   .topbar-inner { height: 48px; padding: 0 16px; }
-  .freshness { display: none; }
+  
   .canvas { padding: 20px 16px 48px; }
   .title-row { flex-direction: column; gap: 12px; }
   .title-row h1 { font-size: 22px; line-height: 28px; }
-  .title-row .btn { align-self: stretch; justify-content: center; height: 44px; }
+  
   .filters-toggle { display: inline-flex; width: 100%; justify-content: center; height: 44px; }
   .filter-panel { display: none; margin-top: 8px; }
   .filter-panel.is-open { display: block; }
   .filter-row, .more-row { display: grid; grid-template-columns: 1fr 1fr; }
-  .filter-row select.control, .more-row select.control { width: 100%; }
+  
   .search { grid-column: 1 / -1; max-width: none; }
-  .control { height: 44px; }
+  .filter-select, .search input { height: 44px; width: 100%; }
+  .title-row [data-slot=button] { align-self: stretch; height: 44px; }
+  
 
   /* KPIs: the two pay figures each take a full row, the counts share one */
   .kpis { grid-template-columns: 1fr 1fr; }
@@ -351,37 +279,25 @@ button.list-row:hover { background: var(--hover); }
   .ladder-row .track { grid-area: track; height: 18px; }
   .n-unit { display: inline; }
 
-  .card-head { flex-wrap: wrap; }
+  
   .chart-box { min-height: 220px; }
-  .table-card .tabulator .tabulator-footer .tabulator-page-size,
-  .table-card .tabulator .tabulator-footer label,
-  .table-card .tabulator .tabulator-footer .tabulator-page[data-page="first"],
-  .table-card .tabulator .tabulator-footer .tabulator-page[data-page="last"] { display: none; }
+  
 }
 
 /* ---------- Job status in the postings table ---------- */
-.status { font-size: var(--fs-small); color: var(--ink-muted); white-space: nowrap; }
-.status.open { color: var(--text); }
-.status.expired { color: var(--negative); }
 
 /* ---------- Admin ---------- */
 .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
-.login-card { width: 100%; max-width: 380px; gap: 16px; padding: 28px; }
-.login-card h1 { font-size: 20px; line-height: 28px; font-weight: 600; margin: 4px 0 0; }
-.login-card .btn { width: 100%; justify-content: center; }
+
 .small { font-size: 13px; }
-.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
-.field .control { width: 100%; }
-.field.inline { flex-direction: row; align-items: center; gap: 10px; }
-.field.inline .control { width: auto; }
+
 .form-error { margin: 0; color: var(--negative); font-size: 13px; }
 .topbar-actions { display: flex; align-items: center; gap: 16px; font-size: 13px; }
 .topbar-actions a, .save-row a { color: var(--text); font-weight: 500; }
-.topbar-actions a.btn { text-decoration: none; }
+
 .admin { max-width: calc(860px + 64px); display: flex; flex-direction: column; gap: var(--gap); }
 .url-form { display: flex; gap: 8px; }
-.url-form .control { flex: 1; min-width: 0; }
-.notice { background: var(--notice-bg); border-color: var(--notice-border); color: var(--notice-ink); gap: 4px; }
+
 .details { display: grid; grid-template-columns: 160px 1fr; margin: 16px 0 0; border-top: 1px solid var(--rule); }
 .details dt, .details dd { margin: 0; padding: 9px 0; border-bottom: 1px solid var(--rule); }
 .details dt { color: var(--ink-muted); }
@@ -393,41 +309,25 @@ button.list-row:hover { background: var(--hover); }
   .details dt { padding-bottom: 0; border-bottom: 0; }
   .topbar-actions .muted { display: none; }
 }
-.warnings { margin: 12px 0 0; padding: 10px 14px 10px 30px; font-size: 13px; line-height: 20px; }
+
 .origin { font-size: var(--fs-small); color: var(--ink-muted); white-space: nowrap; }
 
 /* ---------- Job details dialog ---------- */
-.table-card .tabulator-row { cursor: pointer; }
+
 button.job-title { background: none; border: 0; padding: 0; font: inherit; font-weight: 500; text-align: left; cursor: pointer; color: var(--text); }
-.job-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--border);
-  border-radius: var(--radius-card); background: var(--surface); color: var(--text); }
-.job-dialog::backdrop { background: rgba(20, 20, 20, 0.45); }
-.job-dialog-body { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
-.job-dialog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.job-dialog-head h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; }
-.job-dialog-head p { margin: 4px 0 0; }
-.icon-btn { width: 36px; padding: 0; justify-content: center; flex: none; }
+
 .job-dialog-pay + .small { margin: 2px 0 0; }
 .job-dialog-pay { margin: 0; font-size: var(--fs-kpi); font-weight: 600; }
 .job-dialog h3 { margin: 0; font-size: var(--fs-small); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); }
 .job-dialog .details { margin-top: 8px; }
-.job-dialog-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.job-dialog-foot a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 
 /* ---------- Admin tabs and AI costs ---------- */
 .admin-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
-.admin-tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 8px 12px; font-weight: 500; color: var(--ink-muted); cursor: pointer; margin-bottom: -1px; }
-.admin-tab:hover { color: var(--text); }
-.admin-tab[aria-current="page"] { color: var(--text); border-bottom-color: var(--text); }
+
 .admin.canvas { max-width: calc(1100px + 64px); }
 .cost-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .cost-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
-.plain-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.plain-table th { text-align: left; font-weight: 500; color: var(--ink-muted); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.plain-table td { padding: 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-.plain-table .r { text-align: right; }
-.nowrap { white-space: nowrap; }
-.table-scroll { overflow-x: auto; }
+
 .url-cell { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .url-cell a { color: var(--text); }
 @media (max-width: 720px) {
@@ -437,23 +337,12 @@ button.job-title { background: none; border: 0; padding: 0; font: inherit; font-
 }
 
 /* roles and users */
-.btn-danger { color: var(--negative); border-color: #f0c4c6; margin-left: auto; }
-.btn-danger:hover { background: #fdf2f2; border-color: var(--negative); }
-.link-btn.danger { color: var(--negative); }
+
 .user-form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); align-items: end; }
-.user-password { display: flex; gap: 8px; }
-.user-password .control { flex: 1; min-width: 0; font-family: ui-monospace, monospace; }
-.user-actions { display: inline-flex; gap: 14px; white-space: nowrap; }
-.plain-table .control { height: 30px; }
+
 .password-page { display: grid; justify-items: start; }
-.notice code { font-family: ui-monospace, monospace; font-size: 14px; font-weight: 600; }
-.user-done { align-self: flex-start; margin-top: 4px; }
 
 /* Job titles and pay wrap instead of being cut off; rows grow to fit. */
-.table-card .tabulator-row .tabulator-cell.col-wrap { white-space: normal; overflow-wrap: anywhere; }
-.table-card .tabulator-row .tabulator-cell { vertical-align: top; }
-.table-card .job-sub { white-space: nowrap; }
-.table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter .tabulator-arrow { border-top-color: transparent; }
 
 /* ---------- Admin top bar and tabs ---------- */
 /* Same width as the admin content below, so the logo lines up with the tabs. */
@@ -461,8 +350,7 @@ button.job-title { background: none; border: 0; padding: 0; font: inherit; font-
 /* Tabs stay on one line; on a narrow screen the row scrolls sideways instead of wrapping words. */
 .admin-tabs { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
 .admin-tabs::-webkit-scrollbar { display: none; }
-.admin-tab { white-space: nowrap; flex: none; }
-.admin-tab:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+
 @media (max-width: 720px) {
   .admin-topbar .brand-name { display: none; }
   .admin-topbar .brand { gap: 6px; }
@@ -471,17 +359,27 @@ button.job-title { background: none; border: 0; padding: 0; font: inherit; font-
 }
 
 /* ---------- Profile menu (admin top bar) ---------- */
-.profile { position: relative; }
+
 .profile-button { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 4px; border-radius: 999px; cursor: pointer; color: var(--ink-muted); }
 .profile-button:hover, .profile-button[aria-expanded="true"] { background: var(--active); color: var(--text); }
-.profile-button:focus-visible, .profile-item:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
-.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; display: inline-grid; place-items: center; font-weight: 600; font-size: 14px; flex: none; }
-.avatar.large { width: 40px; height: 40px; font-size: 17px; }
-.profile-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; width: min(300px, calc(100vw - 32px)); background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: 0 12px 32px rgba(0, 0, 0, .12); padding: 6px; }
-.profile-who { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--rule); }
-.profile-who > span:last-child { display: grid; min-width: 0; }
-.profile-who strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+
 .profile-role { font-size: var(--fs-small); color: var(--ink-muted); }
-.profile-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: var(--radius-control); padding: 9px 10px; font: inherit; color: var(--text); cursor: pointer; }
-.profile-item:hover { background: var(--hover); }
+
+
+/* ---------- shadcn parts in the admin layout ---------- */
+.fill { align-self: stretch; }
+.filter-select { width: 164px; }
+.filter-select > span { overflow: hidden; text-overflow: ellipsis; }
+.url-form [data-slot=input] { flex: 1; min-width: 0; }
+
+/* Postings table (shadcn Table + TanStack): flush to the card edges, header inside */
+.table-card { padding: 0; }
+.table-card > [data-slot=card-header] { padding: var(--pad) var(--pad) 0; margin-bottom: 8px; }
+.jobs-table th:first-child, .jobs-table td:first-child { padding-left: var(--pad); }
+.jobs-table th:last-child, .jobs-table td:last-child { padding-right: var(--pad); }
+.jobs-table tbody tr { border-color: var(--rule); }
+.sort-btn { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.sort-btn:hover { color: var(--text); }
+.jobs-table-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 16px; padding: 10px var(--pad);
+  border-top: 1px solid var(--border); color: var(--ink-muted); font-size: 13px; }

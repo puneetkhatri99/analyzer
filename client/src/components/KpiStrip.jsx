@@ -1,5 +1,7 @@
 import React from "react";
 import { MIN_PAID, count, money, percent, range } from "../format.js";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function Kpi({ label, value, sub, lead = false, suffix }) {
   return (
@@ -17,21 +19,21 @@ function Kpi({ label, value, sub, lead = false, suffix }) {
 export default function KpiStrip({ stats, loading }) {
   if (loading) {
     return (
-      <div className="card kpis" aria-busy="true">
+      <Card className="kpis" aria-busy="true">
         {["Median pay", "Middle half earn", "Postings with pay", "Employers"].map((label, i) => (
           <div className="kpi" key={label}>
             <div className="kpi-label">{label}</div>
-            <div className={`kpi-value${i === 0 ? " lead" : ""}`}><span className="skeleton" style={{ width: i < 2 ? 150 : 80 }}>0</span></div>
-            <div className="kpi-sub"><span className="skeleton" style={{ width: 120 }}>0</span></div>
+            <div className={`kpi-value${i === 0 ? " lead" : ""}`}><Skeleton className="inline-block h-[0.8em]" style={{ width: i < 2 ? 150 : 80 }} /></div>
+            <div className="kpi-sub"><Skeleton className="h-3 w-[120px]" /></div>
           </div>
         ))}
-      </div>
+      </Card>
     );
   }
 
   const benchmarked = stats.paid >= MIN_PAID;
   return (
-    <div className="card kpis">
+    <Card className="kpis">
       <Kpi lead label="Median pay" value={benchmarked ? money(stats.median) : "—"} suffix={benchmarked ? "/yr" : null}
         sub={benchmarked ? "Hourly pay counted at 2,080 hrs a year" : `Needs ${MIN_PAID}+ postings with pay`} />
       <Kpi label="Middle half earn" value={benchmarked ? range(stats.p25, stats.p75) : "—"}
@@ -40,6 +42,6 @@ export default function KpiStrip({ stats, loading }) {
         sub={stats.postings ? `${percent(stats.paid, stats.postings)} list a salary` : "No matching postings"} />
       <Kpi label="Employers" value={count(stats.employers)}
         sub={`${count(stats.denominations)} denominations stated`} />
-    </div>
+    </Card>
   );
 }

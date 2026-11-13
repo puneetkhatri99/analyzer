@@ -4,11 +4,17 @@ import KpiStrip from "./components/KpiStrip.jsx";
 import PayLadder from "./components/PayLadder.jsx";
 import BreakdownList from "./components/BreakdownList.jsx";
 import PayDistribution from "./components/PayDistribution.jsx";
-import JobsTable from "./components/JobsTable.jsx";
+import JobsTable, { CSV_COLUMNS } from "./components/JobsTable.jsx";
+import { downloadCsv, toCsv } from "./csv.js";
 import SourceTabs from "./components/SourceTabs.jsx";
 import JobDetail from "./components/JobDetail.jsx";
 import { fetchFilterOptions, fetchJobs, fetchSources, fetchSummary, postJSON, toQuery } from "./api.js";
 import { MIN_PAID, count, longDate, money } from "./format.js";
+import { Download } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const EMPTY_FILTERS = {
   search: "", role: "", region: "", denomination: "", min_church_size: 0, hours: "", status: "", origin: "",
@@ -56,14 +62,14 @@ function finding(filters, stats) {
 
 function LoadingCard({ className, title, rows = 6 }) {
   return (
-    <section className={`card ${className}`} aria-busy="true">
-      <div className="card-head"><h2>{title}</h2></div>
+    <Card className={className} aria-busy="true">
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} style={{ height: 32, display: "flex", alignItems: "center" }}>
-          <span className="skeleton" style={{ width: `${90 - i * 8}%`, height: 10 }} />
+        <div key={i} className="flex h-8 items-center">
+          <Skeleton className="h-2.5" style={{ width: `${90 - i * 8}%` }} />
         </div>
       ))}
-    </section>
+    </Card>
   );
 }
 
@@ -119,7 +125,9 @@ export default function AdminJobs({ canEdit = false }) {
   const setFilter = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
   const clearFilter = (key) => setFilter(key, EMPTY_FILTERS[key]);
   const resetFilters = () => setFilters(EMPTY_FILTERS);
-  const exportCsv = () => table?.download("csv", `ministry-jobs-${source}-${new Date().toISOString().slice(0, 10)}.csv`);
+  // exports every matching posting, in the table's current sort order
+  const exportCsv = () => downloadCsv(toCsv(table.getSortedRowModel().rows.map((r) => r.original), CSV_COLUMNS),
+    `ministry-jobs-${source}-${new Date().toISOString().slice(0, 10)}.csv`);
 
   const s = summary?.stats;
   const current = sources?.find((x) => x.key === source);
@@ -134,27 +142,29 @@ export default function AdminJobs({ canEdit = false }) {
             <h1>Jobs by source</h1>
             <p className="muted small">{current?.label || "…"} · {source === "json" ? "data as of" : "pages last read"} {s?.as_of ? longDate(s.as_of) : "…"}</p>
             <p className="finding" aria-live="polite">
-              {s ? finding(filters, s) : <span className="skeleton" style={{ width: 520 }}>Loading</span>}
+              {s ? finding(filters, s) : <Skeleton className="inline-block h-4 w-[min(520px,100%)]" />}
             </p>
           </div>
-          <button type="button" className="btn btn-primary" onClick={exportCsv} disabled={!table || !s?.postings}>
-            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 13h10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <Button onClick={exportCsv} disabled={!table || !s?.postings}>
+            <Download aria-hidden="true" />
             Export {s ? count(s.postings) : ""} postings
-          </button>
+          </Button>
         </div>
 
         <FilterBar filters={filters} setFilter={setFilter} clearFilter={clearFilter} resetFilters={resetFilters} options={options} showChurchSize={isChurch} />
 
         {error && (
-          <div className="card error-card" role="alert">
-            <strong>Couldn’t load the benchmarks.</strong>
-            <span className="muted">The server didn’t answer ({error}). It may be waking up; try again in a minute.</span>
-            <button type="button" className="btn" onClick={() => load(source, filters)}>Retry</button>
-          </div>
+          <Alert variant="destructive">
+            <AlertTitle>Couldn’t load the benchmarks.</AlertTitle>
+            <AlertDescription>
+              The server didn’t answer ({error}). It may be waking up; try again in a minute.
+              <Button variant="outline" size="sm" className="mt-2 text-foreground" onClick={() => load(source, filters)}>Retry</Button>
+            </AlertDescription>
+          </Alert>
         )}
 
         {!error && (
-          <div className={`grid${updating && summary ? " is-updating" : ""}`} aria-busy={updating}>
+          <div className={`dash-grid${updating && summary ? " is-updating" : ""}`} aria-busy={updating}>
             <div className="span-12"><KpiStrip stats={s} loading={!s} /></div>
 
             {!summary ? (
@@ -164,65 +174,65 @@ export default function AdminJobs({ canEdit = false }) {
               </>
             ) : (
               <>
-                <section className="card span-7" aria-labelledby="h-role">
-                  <div className="card-head">
-                    <h2 id="h-role">Pay by role</h2>
+                <Card as="section" className="span-7" aria-labelledby="h-role">
+                  <CardHeader>
+                    <CardTitle id="h-role">Pay by role</CardTitle>
                     <div className="legend" aria-hidden="true">
                       <span><i className="sw-band" />Middle half</span>
                       <span><i className="sw-tick" />Median</span>
                     </div>
-                  </div>
+                  </CardHeader>
                   <PayLadder rows={summary.by_role} nameHeader="Role" selected={filters.role} onSelect={(v) => setFilter("role", v)} />
                   <p className="card-note">Annual pay; hourly roles counted at 2,080 hours. Role is matched from the job title. Roles with fewer than {MIN_PAID} paid postings aren’t benchmarked.</p>
-                </section>
+                </Card>
 
                 <div className="stack span-5">
-                  <section className="card" aria-labelledby="h-state">
-                    <div className="card-head">
-                      <h2 id="h-state">Pay by state</h2>
-                      <span className="meta">Top 10 by postings</span>
-                    </div>
+                  <Card as="section" aria-labelledby="h-state">
+                    <CardHeader>
+                      <CardTitle id="h-state">Pay by state</CardTitle>
+                      <CardDescription>Top 10 by postings</CardDescription>
+                    </CardHeader>
                     <PayLadder compact rows={summary.by_state} nameHeader="State" selected={filters.region} onSelect={(v) => setFilter("region", v)} />
-                  </section>
+                  </Card>
 
-                  {isChurch && <section className="card" aria-labelledby="h-size">
-                    <div className="card-head">
-                      <h2 id="h-size">By church size</h2>
-                      <span className="meta">Weekly attendance</span>
-                    </div>
+                  {isChurch && <Card as="section" aria-labelledby="h-size">
+                    <CardHeader>
+                      <CardTitle id="h-size">By church size</CardTitle>
+                      <CardDescription>Weekly attendance</CardDescription>
+                    </CardHeader>
                     <BreakdownList rows={summary.by_church_size.filter((r) => r.postings > 0)} nameHeader="Attendance" />
                     <p className="card-note">{count(s.no_church_size)} of {count(s.postings)} postings don’t state church size.</p>
-                  </section>}
+                  </Card>}
                 </div>
 
-                <section className="card span-7 fill" aria-labelledby="h-dist">
-                  <div className="card-head">
-                    <h2 id="h-dist">How pay is spread</h2>
-                    <span className="meta">{count(s.paid)} postings with pay</span>
-                  </div>
+                <Card as="section" className="span-7 fill" aria-labelledby="h-dist">
+                  <CardHeader>
+                    <CardTitle id="h-dist">How pay is spread</CardTitle>
+                    <CardDescription>{count(s.paid)} postings with pay</CardDescription>
+                  </CardHeader>
                   {s.paid > 0
                     ? <PayDistribution histogram={summary.histogram} bin={summary.histogram_bin} cap={summary.histogram_cap} median={s.median} />
                     : <p className="empty-line">None of the matching postings list pay.</p>}
-                </section>
+                </Card>
 
-                <section className="card span-5" aria-labelledby="h-denom">
-                  <div className="card-head">
-                    <h2 id="h-denom">By denomination</h2>
-                    <span className="meta">{count(summary.by_denomination.length)} stated</span>
-                  </div>
+                <Card as="section" className="span-5" aria-labelledby="h-denom">
+                  <CardHeader>
+                    <CardTitle id="h-denom">By denomination</CardTitle>
+                    <CardDescription>{count(summary.by_denomination.length)} stated</CardDescription>
+                  </CardHeader>
                   <BreakdownList rows={summary.by_denomination} nameHeader="Denomination" limit={7} selected={filters.denomination} onSelect={(v) => setFilter("denomination", v)} />
                   <p className="card-note">{count(s.no_denomination)} of {count(s.postings)} postings don’t state a denomination.</p>
-                </section>
+                </Card>
               </>
             )}
 
-            <section className="card table-card span-12" aria-labelledby="h-postings">
-              <div className="card-head">
-                <h2 id="h-postings">Postings</h2>
-                <span className="meta">{s ? `${count(s.postings)} matching · newest first` : ""}</span>
-              </div>
+            <Card as="section" className="table-card span-12" aria-labelledby="h-postings">
+              <CardHeader>
+                <CardTitle id="h-postings">Postings</CardTitle>
+                <CardDescription>{s ? `${count(s.postings)} matching · newest first` : ""}</CardDescription>
+              </CardHeader>
               <JobsTable rows={rows} onReady={setTable} onOpen={setOpenJob} />
-            </section>
+            </Card>
           </div>
         )}
       {openJob && (
@@ -230,11 +240,8 @@ export default function AdminJobs({ canEdit = false }) {
           job={openJob}
           onDelete={canEdit ? () => postJSON(`/api/admin/jobs?${toQuery({ source, id: openJob.post_uuid })}`, undefined, "DELETE")
             .then(() => { setOpenJob(null); load(source, filters); fetchSources().then(setSources).catch(() => {}); }) : null}
-          onClose={() => {
-            // The table may redraw its rows while the dialog is open, so find the row again to return focus to it.
-            table?.getRow(openJob.post_uuid)?.getElement?.().querySelector("button.job-title")?.focus();
-            setOpenJob(null);
-          }}
+          onClose={() => setOpenJob(null)}
+          returnFocus={() => document.querySelector(`button.job-title[data-id="${CSS.escape(openJob.post_uuid)}"]`)?.focus()}
         />
       )}
     </>

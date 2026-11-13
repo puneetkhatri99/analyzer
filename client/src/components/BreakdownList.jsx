@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { MIN_PAID, count, money } from "../format.js";
+import { Button } from "@/components/ui/button";
 
 export default function BreakdownList({ rows, nameHeader, selected, onSelect, limit }) {
   const [showAll, setShowAll] = useState(false);
@@ -48,9 +49,9 @@ export default function BreakdownList({ rows, nameHeader, selected, onSelect, li
       })}
       {limit && rows.length > limit && (
         <div className="card-foot">
-          <button type="button" className="link-btn" onClick={() => setShowAll((v) => !v)}>
+          <Button variant="link" className="h-auto p-0 text-foreground" onClick={() => setShowAll((v) => !v)}>
             {showAll ? "Show fewer" : `Show all ${rows.length}`}
-          </button>
+          </Button>
         </div>
       )}
     </div>

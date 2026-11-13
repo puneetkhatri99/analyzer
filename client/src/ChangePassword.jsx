@@ -1,5 +1,15 @@
 import React, { useState } from "react";
 import { postJSON } from "./api.js";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+const FIELDS = [
+  ["current", "current-password", 0],
+  ["next", "new-password", 8],
+  ["again", "new-password", 8],
+];
 
 // forced: first sign-in with a password an admin gave, so nothing else is reachable until it's changed.
 export default function ChangePassword({ forced, onDone }) {
@@ -7,7 +17,11 @@ export default function ChangePassword({ forced, onDone }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const labels = {
+    current: forced ? "One-time password" : "Current password",
+    next: "New password (at least 8 characters)",
+    again: "New password again",
+  };
 
   const submit = (e) => {
     e.preventDefault();
@@ -21,21 +35,21 @@ export default function ChangePassword({ forced, onDone }) {
   };
 
   return (
-    <form className="card login-card" onSubmit={submit}>
-      <h1>{forced ? "Choose your own password" : "Change your password"}</h1>
-      {forced && <p className="muted">You signed in with a one-time password from an admin. Choose a new one to continue.</p>}
-      <label className="field"><span>{forced ? "One-time password" : "Current password"}</span>
-        <input className="control" type="password" autoComplete="current-password" required value={form.current} onChange={set("current")} />
-      </label>
-      <label className="field"><span>New password (at least 8 characters)</span>
-        <input className="control" type="password" autoComplete="new-password" required minLength={8} value={form.next} onChange={set("next")} />
-      </label>
-      <label className="field"><span>New password again</span>
-        <input className="control" type="password" autoComplete="new-password" required minLength={8} value={form.again} onChange={set("again")} />
-      </label>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      {done && !forced && <p className="muted" role="status">Password changed. Your other sessions were signed out.</p>}
-      <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save password"}</button>
-    </form>
+    <Card className="w-full max-w-[380px] p-7">
+      <form className="flex flex-col gap-4" onSubmit={submit}>
+        <h1 className="m-0 text-xl font-semibold">{forced ? "Choose your own password" : "Change your password"}</h1>
+        {forced && <p className="muted m-0">You signed in with a one-time password from an admin. Choose a new one to continue.</p>}
+        {FIELDS.map(([key, autoComplete, minLength]) => (
+          <div className="grid gap-1.5" key={key}>
+            <Label htmlFor={`pw-${key}`}>{labels[key]}</Label>
+            <Input id={`pw-${key}`} type="password" autoComplete={autoComplete} required minLength={minLength || undefined}
+              value={form[key]} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} />
+          </div>
+        ))}
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {done && !forced && <p className="muted m-0" role="status">Password changed. Your other sessions were signed out.</p>}
+        <Button type="submit" className="w-full" disabled={busy}>{busy ? "Saving…" : "Save password"}</Button>
+      </form>
+    </Card>
   );
 }

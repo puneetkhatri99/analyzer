@@ -1,5 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
+import { ExternalLink } from "lucide-react";
 import { ORIGINS, count, listedPay, longDate, money } from "../format.js";
+import Confirm from "./Confirm.jsx";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const yesNo = (v) => (v == null || v === "" ? null : String(v) === "true" ? "Yes" : "No");
 
@@ -10,12 +14,9 @@ function statusText(d) {
 }
 
 // onDelete is given only to users who may delete (editors and admins); it returns a promise.
-export default function JobDetail({ job, onClose, onDelete }) {
-  const dialog = useRef(null);
+// returnFocus puts focus back on the job's row once the dialog has closed.
+export default function JobDetail({ job, onClose, onDelete, returnFocus }) {
   const [deleteError, setDeleteError] = useState(null);
-  useEffect(() => {
-    dialog.current?.showModal(); // native modal: traps focus, Esc closes
-  }, []);
 
   const pay = listedPay(job);
   const location = [job.city, job.region, job.country].filter(Boolean).join(", ");
@@ -49,18 +50,13 @@ export default function JobDetail({ job, onClose, onDelete }) {
   ];
 
   return (
-    <dialog ref={dialog} className="job-dialog" aria-labelledby="job-dialog-title" onClose={onClose}
-      onClick={(e) => e.target === dialog.current && dialog.current.close()}>
-      <div className="job-dialog-body">
-        <header className="job-dialog-head">
-          <div>
-            <h2 id="job-dialog-title">{job.job_name || "Untitled role"}</h2>
-            <p className="muted">{[job.company_name, location].filter(Boolean).join(" · ") || "Employer not stated"}</p>
-          </div>
-          <button type="button" className="btn icon-btn" aria-label="Close" onClick={() => dialog.current.close()}>
-            <svg width="14" height="14" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-          </button>
-        </header>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="job-dialog max-h-[calc(100vh-48px)] gap-5 overflow-y-auto sm:max-w-[640px]"
+        onCloseAutoFocus={(e) => { e.preventDefault(); returnFocus?.(); }}>
+        <DialogHeader className="text-left">
+          <DialogTitle className="pr-8 text-xl">{job.job_name || "Untitled role"}</DialogTitle>
+          <DialogDescription>{[job.company_name, location].filter(Boolean).join(" · ") || "Employer not stated"}</DialogDescription>
+        </DialogHeader>
 
         <div>
           {pay
@@ -85,18 +81,23 @@ export default function JobDetail({ job, onClose, onDelete }) {
           </section>
         ))}
 
-        <footer className="job-dialog-foot">
+        <DialogFooter className="flex-row flex-wrap justify-start sm:justify-start">
           {job.post_url && (
-            <a className="btn btn-primary" href={job.post_url} target="_blank" rel="noopener noreferrer">Open original posting ↗</a>
+            <Button asChild>
+              <a href={job.post_url} target="_blank" rel="noopener noreferrer">Open original posting <ExternalLink aria-hidden="true" /></a>
+            </Button>
           )}
-          <button type="button" className="btn" onClick={() => dialog.current.close()}>Close</button>
+          <Button variant="outline" onClick={onClose}>Close</Button>
           {onDelete && (
-            <button type="button" className="btn btn-danger" onClick={() => window.confirm(`Delete “${job.job_name || "this job"}” for good? It is removed from every view and report.`)
-              && onDelete().catch((e) => setDeleteError(e.message))}>Delete job</button>
+            <Confirm title={`Delete “${job.job_name || "this job"}”?`} action="Delete job"
+              description="It is removed for good from every view and report."
+              onConfirm={() => onDelete().catch((e) => setDeleteError(e.message))}>
+              <Button variant="outline" className="ml-auto border-[#f0c4c6] text-destructive hover:border-destructive hover:bg-[#fdf2f2] hover:text-destructive">Delete job</Button>
+            </Confirm>
           )}
-        </footer>
+        </DialogFooter>
         {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
-      </div>
-    </dialog>
+      </DialogContent>
+    </Dialog>
   );
 }

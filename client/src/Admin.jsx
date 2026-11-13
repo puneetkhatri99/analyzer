@@ -6,6 +6,13 @@ import ChangePassword from "./ChangePassword.jsx";
 import Users from "./Users.jsx";
 import ProfileMenu from "./ProfileMenu.jsx";
 import { ORIGINS, count, listedPay } from "./format.js";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const DATASETS = { churches: "BizDev churches", nonprofits: "BizDev nonprofits" };
 
@@ -27,21 +34,23 @@ function Login({ onSignedIn }) {
 
   return (
     <main className="login">
-      <form className="card login-card" onSubmit={submit}>
-        <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" />Market Analysis Tool</div>
-        <h1>Admin sign in</h1>
-        <label className="field">
-          <span>Email</span>
-          <input className="control" type="email" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Password</span>
-          <input className="control" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-        </label>
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
-        <a className="muted small" href="/">Back to the public tool</a>
-      </form>
+      <Card className="w-full max-w-[380px] p-7">
+        <form className="flex flex-col gap-4" onSubmit={submit}>
+          <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" />Market Analysis Tool</div>
+          <h1 className="m-0 mt-1 text-xl font-semibold">Admin sign in</h1>
+          <div className="grid gap-1.5">
+            <Label htmlFor="login-email">Email</Label>
+            <Input id="login-email" type="email" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="login-password">Password</Label>
+            <Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <Button type="submit" className="w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</Button>
+          <a className="muted small" href="/">Back to the public tool</a>
+        </form>
+      </Card>
     </main>
   );
 }
@@ -107,59 +116,62 @@ function AddJob() {
   const job = result?.job;
   return (
     <>
-      <section className="card">
-        <div className="card-head"><h2>Add a job from a URL</h2></div>
+      <Card>
+        <CardHeader><CardTitle>Add a job from a URL</CardTitle></CardHeader>
         <form className="url-form" onSubmit={extract}>
-          <label className="sr-only" htmlFor="job-url">Job posting URL</label>
-          <input id="job-url" className="control" type="url" required placeholder="https://… link to a single job posting"
+          <Label className="sr-only" htmlFor="job-url">Job posting URL</Label>
+          <Input id="job-url" type="url" required placeholder="https://… link to a single job posting"
             value={url} onChange={(e) => setUrl(e.target.value)} disabled={busy} />
-          <button type="submit" className="btn btn-primary" disabled={busy || !url.trim()}>
+          <Button type="submit" disabled={busy || !url.trim()}>
             {busy && !result ? "Reading page…" : "Fetch job"}
-          </button>
+          </Button>
         </form>
         <p className="card-note">
           The page is read and an AI model extracts the job’s details. Blocked or JavaScript-only pages are read through web search,
           which can take up to a minute. Nothing is saved until you review it.
         </p>
         {error && <p className="form-error" role="alert">{error}</p>}
-      </section>
+      </Card>
 
       {job && job.page_type !== "job_posting" && (
-        <section className="card notice" role="status">
-          <strong>{job.page_type === "unreadable" ? "This page couldn’t be read as a job posting." : "This is not a job posting."}</strong>
-          <span>{job.reason}</span>
-        </section>
+        <Alert variant="notice" role="status">
+          <AlertTitle className="line-clamp-none">{job.page_type === "unreadable" ? "This page couldn’t be read as a job posting." : "This is not a job posting."}</AlertTitle>
+          <AlertDescription className="text-inherit">{job.reason}</AlertDescription>
+        </Alert>
       )}
 
       {job && job.page_type === "job_posting" && (
-        <section className="card">
-          <div className="card-head">
-            <h2>Review the extracted job</h2>
-            <span className="meta">Will be saved as “{ORIGINS[`admin_${result.method}`]}”</span>
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Review the extracted job</CardTitle>
+            <CardDescription>Will be saved as “{ORIGINS[`admin_${result.method}`]}”</CardDescription>
+          </CardHeader>
           <p className="finding">{job.reason}</p>
           {result.warnings.length > 0 && (
-            <ul className="card notice warnings" aria-label="Check before saving">
-              {result.warnings.map((w) => <li key={w}>{w}</li>)}
-            </ul>
+            <Alert variant="notice" role="status" className="mt-3" aria-label="Check before saving">
+              <ul className="m-0 list-disc pl-4">{result.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+            </Alert>
           )}
           <JobDetails job={job} />
           <div className="save-row">
-            <label className="field inline">
-              <span>Add to</span>
-              <select className="control" value={dataset} onChange={(e) => { setDataset(e.target.value); setSaved(null); }} disabled={busy}>
-                {Object.entries(DATASETS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-              </select>
-            </label>
-            <button type="button" className="btn btn-primary" onClick={save} disabled={busy || saved === dataset}>
+            <div className="flex items-center gap-2.5">
+              <Label htmlFor="save-dataset">Add to</Label>
+              <Select value={dataset} onValueChange={(v) => { setDataset(v); setSaved(null); }} disabled={busy}>
+                <SelectTrigger id="save-dataset"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(DATASETS).map(([k, label]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="button" onClick={save} disabled={busy || saved === dataset}>
               {saved === dataset ? "Saved" : busy ? "Saving…" : "Save job"}
-            </button>
+            </Button>
             {saved && (
-              <a href={`/?source=${saved}&search=${encodeURIComponent(job.job_title || "")}`}>View it on the dashboard</a>
+              <a href={`/admin?source=${saved}&search=${encodeURIComponent(job.job_title || "")}`}>View it in Jobs</a>
             )}
           </div>
           {job.category === "other" && <p className="card-note">The AI thinks this employer is a for-profit company. Check it belongs here before saving.</p>}
-        </section>
+        </Card>
       )}
     </>
   );
@@ -201,16 +213,17 @@ export default function Admin() {
         <main className="login"><ChangePassword forced onDone={refresh} /></main>
       ) : (
         <main className="canvas admin">
-          <nav className="admin-tabs" aria-label="Admin sections">
-            {tabs.map(([key, label]) => (
-              <button key={key} type="button" className="admin-tab" aria-current={current === key ? "page" : undefined} onClick={() => showTab(key)}>{label}</button>
-            ))}
-          </nav>
-          {current === "jobs" && <AdminJobs canEdit={can(user, "editor")} />}
-          {current === "add" && <AddJob />}
-          {current === "users" && <Users me={user.email} />}
-          {current === "costs" && <AiCosts />}
-          {current === "password" && <div className="password-page"><ChangePassword /></div>}
+          <Tabs value={current} onValueChange={showTab} className="gap-3">
+            <TabsList variant="line" aria-label="Admin sections" className="admin-tabs">
+              {tabs.map(([key, label]) => <TabsTrigger key={key} value={key} className="flex-none px-3">{label}</TabsTrigger>)}
+            </TabsList>
+            <TabsContent value="jobs" className="flex min-w-0 flex-col gap-3"><AdminJobs canEdit={can(user, "editor")} /></TabsContent>
+            <TabsContent value="add" className="flex min-w-0 flex-col gap-3"><AddJob /></TabsContent>
+            <TabsContent value="users" className="min-w-0"><Users me={user.email} /></TabsContent>
+            <TabsContent value="costs" className="flex min-w-0 flex-col gap-3"><AiCosts /></TabsContent>
+            {/* opened from the profile menu, so it has no tab of its own */}
+            {current === "password" && <div className="password-page"><ChangePassword /></div>}
+          </Tabs>
         </main>
       )}
     </>

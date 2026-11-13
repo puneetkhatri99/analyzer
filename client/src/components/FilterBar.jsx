@@ -1,5 +1,13 @@
 import React, { useState } from "react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { count, money } from "../format.js";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const CHURCH_SIZES = [
   [250, "250+ attendance"],
@@ -8,24 +16,28 @@ const CHURCH_SIZES = [
 ];
 const MIN_PAY = [30000, 40000, 50000, 60000, 80000, 100000];
 const MORE_KEYS = ["status", "origin", "country", "remote", "min_salary", "has_pay"];
-const ORIGIN = { feed: "JSON feed", excel: "Excel import", admin: "Added by admin", collector: "Auto-collected" };
+const ORIGIN = { feed: "JSON feed", excel: "Excel import", admin: "Added by admin" };
 const STATUS = { open: "Still open", expired: "Expired", unverified: "Not verified" };
+// Radix Select can't hold "" as a value, so "All …" uses this and is turned back into "" here.
+const ALL = "__all";
 
-function Select({ id, label, value, onChange, children }) {
+// options: [[value, label], …]; `all` is the label of the "no filter" choice.
+function FilterSelect({ id, label, value, onChange, all, options }) {
+  const v = value === "" || value === 0 || value == null ? ALL : String(value);
   return (
-    <select
-      id={id}
-      aria-label={label}
-      className={`control${value ? " is-set" : ""}`}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {children}
-    </select>
+    <Select value={v} onValueChange={(x) => onChange(x === ALL ? "" : x)}>
+      <SelectTrigger id={id} aria-label={label} className={`filter-select${v !== ALL ? " border-foreground" : ""}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>{all}</SelectItem>
+        {options.map(([value, text]) => <SelectItem key={value} value={String(value)}>{text}</SelectItem>)}
+      </SelectContent>
+    </Select>
   );
 }
 
-const options = (pairs) => pairs.map(([name, n]) => <option key={name} value={name}>{name} ({count(n)})</option>);
+const counted = (pairs) => pairs.map(([name, n]) => [name, `${name} (${count(n)})`]);
 
 function describe(key, value) {
   switch (key) {
@@ -45,103 +57,71 @@ function describe(key, value) {
   }
 }
 
-function XIcon() {
-  return <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
-}
-
 export default function FilterBar({ filters, setFilter, clearFilter, resetFilters, options: opts, showChurchSize = true }) {
   const moreActive = MORE_KEYS.filter((k) => filters[k]).length;
   const [moreOpen, setMoreOpen] = useState(moreActive > 0);
   const [panelOpen, setPanelOpen] = useState(false);
   const o = opts || { roles: [], denominations: [], regions: [], countries: [], hours: [] };
   const active = Object.entries(filters).filter(([, v]) => v !== "" && v !== 0 && v !== false);
+  const number = (key) => (v) => setFilter(key, Number(v) || 0);
 
   return (
     <section className="filters" aria-label="Filters">
-      <button type="button" className="btn filters-toggle" aria-expanded={panelOpen} onClick={() => setPanelOpen((v) => !v)}>
+      <Button variant="outline" className="filters-toggle" aria-expanded={panelOpen} onClick={() => setPanelOpen((v) => !v)}>
         {panelOpen ? "Hide filters" : `Filters${active.length ? ` (${active.length})` : ""}`}
-      </button>
+      </Button>
 
-      <div className={`filter-panel${panelOpen ? " is-open" : ""}`}>
+      <Collapsible open={moreOpen} onOpenChange={setMoreOpen} className={`filter-panel${panelOpen ? " is-open" : ""}`}>
         <div className="filter-row">
-          <label className="search">
-            <span className="sr-only">Search job title or employer</span>
-            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="M11 11l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
-            <input
-              id="f-search"
-              type="search"
-              className="control"
-              placeholder="Search title or employer"
-              value={filters.search}
-              onChange={(e) => setFilter("search", e.target.value)}
-            />
-          </label>
-          <Select id="f-role" label="Role" value={filters.role} onChange={(v) => setFilter("role", v)}>
-            <option value="">All roles</option>{options(o.roles)}
-          </Select>
-          <Select id="f-region" label="State" value={filters.region} onChange={(v) => setFilter("region", v)}>
-            <option value="">All states</option>{options(o.regions)}
-          </Select>
-          <Select id="f-denom" label="Denomination" value={filters.denomination} onChange={(v) => setFilter("denomination", v)}>
-            <option value="">All denominations</option>{options(o.denominations)}
-          </Select>
+          <div className="search">
+            <Label htmlFor="f-search" className="sr-only">Search job title or employer</Label>
+            <Search className="size-3.5" aria-hidden="true" />
+            <Input id="f-search" type="search" placeholder="Search title or employer" value={filters.search} onChange={(e) => setFilter("search", e.target.value)} />
+          </div>
+          <FilterSelect id="f-role" label="Role" value={filters.role} onChange={(v) => setFilter("role", v)} all="All roles" options={counted(o.roles)} />
+          <FilterSelect id="f-region" label="State" value={filters.region} onChange={(v) => setFilter("region", v)} all="All states" options={counted(o.regions)} />
+          <FilterSelect id="f-denom" label="Denomination" value={filters.denomination} onChange={(v) => setFilter("denomination", v)} all="All denominations" options={counted(o.denominations)} />
           {showChurchSize && (
-            <Select id="f-size" label="Church size" value={filters.min_church_size || ""} onChange={(v) => setFilter("min_church_size", Number(v) || 0)}>
-              <option value="">Any church size</option>
-              {CHURCH_SIZES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-            </Select>
+            <FilterSelect id="f-size" label="Church size" value={filters.min_church_size} onChange={number("min_church_size")} all="Any church size" options={CHURCH_SIZES} />
           )}
-          <Select id="f-hours" label="Employment type" value={filters.hours} onChange={(v) => setFilter("hours", v)}>
-            <option value="">Any job type</option>{options(o.hours)}
-          </Select>
-          <button type="button" className="btn" aria-expanded={moreOpen} aria-controls="more-filters" onClick={() => setMoreOpen((v) => !v)}>
-            More filters{moreActive ? ` (${moreActive})` : ""}
-            <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true" style={{ transform: moreOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
-          </button>
+          <FilterSelect id="f-hours" label="Employment type" value={filters.hours} onChange={(v) => setFilter("hours", v)} all="Any job type" options={counted(o.hours)} />
+          <CollapsibleTrigger asChild>
+            <Button variant="outline">
+              More filters{moreActive ? ` (${moreActive})` : ""}
+              <ChevronDown className={`size-3 transition-transform ${moreOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+            </Button>
+          </CollapsibleTrigger>
         </div>
 
-        {moreOpen && (
-          <div className="more-row" id="more-filters">
-            <Select id="f-status" label="Job status" value={filters.status} onChange={(v) => setFilter("status", v)}>
-              <option value="">Open or expired</option>
-              {Object.entries(STATUS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-            </Select>
-            <Select id="f-origin" label="Added via" value={filters.origin} onChange={(v) => setFilter("origin", v)}>
-              <option value="">Any origin</option>
-              {Object.entries(ORIGIN).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-            </Select>
-            <Select id="f-country" label="Country" value={filters.country} onChange={(v) => setFilter("country", v)}>
-              <option value="">All countries</option>{options(o.countries)}
-            </Select>
-            <Select id="f-remote" label="Remote" value={filters.remote} onChange={(v) => setFilter("remote", v)}>
-              <option value="">Remote or on-site</option>
-              <option value="true">Remote only</option>
-              <option value="false">On-site only</option>
-            </Select>
-            <Select id="f-pay" label="Minimum pay" value={filters.min_salary || ""} onChange={(v) => setFilter("min_salary", Number(v) || 0)}>
-              <option value="">Any pay</option>
-              {MIN_PAY.map((v) => <option key={v} value={v}>{money(v)}+ a year</option>)}
-            </Select>
-            <label className="check">
-              <input id="f-has-pay" type="checkbox" checked={filters.has_pay} onChange={(e) => setFilter("has_pay", e.target.checked)} />
-              Listed pay only
-            </label>
+        <CollapsibleContent className="more-row">
+          <FilterSelect id="f-status" label="Job status" value={filters.status} onChange={(v) => setFilter("status", v)} all="Open or expired" options={Object.entries(STATUS)} />
+          <FilterSelect id="f-origin" label="Added via" value={filters.origin} onChange={(v) => setFilter("origin", v)} all="Any origin" options={Object.entries(ORIGIN)} />
+          <FilterSelect id="f-country" label="Country" value={filters.country} onChange={(v) => setFilter("country", v)} all="All countries" options={counted(o.countries)} />
+          <FilterSelect id="f-remote" label="Remote" value={filters.remote} onChange={(v) => setFilter("remote", v)} all="Remote or on-site"
+            options={[["true", "Remote only"], ["false", "On-site only"]]} />
+          <FilterSelect id="f-pay" label="Minimum pay" value={filters.min_salary} onChange={number("min_salary")} all="Any pay"
+            options={MIN_PAY.map((v) => [v, `${money(v)}+ a year`])} />
+          <div className="flex h-9 items-center gap-2 px-1">
+            <Checkbox id="f-has-pay" checked={filters.has_pay} onCheckedChange={(v) => setFilter("has_pay", v === true)} />
+            <Label htmlFor="f-has-pay" className="font-normal">Listed pay only</Label>
           </div>
-        )}
-      </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       {active.length > 0 && (
         <div className="chips" aria-label="Active filters">
           {active.map(([key, value]) => {
             const [name, detail] = describe(key, value);
             return (
-              <button type="button" key={key} className="chip" onClick={() => clearFilter(key)} aria-label={`Remove filter ${name}${detail ? ` ${detail}` : ""}`}>
-                <span>{name}{detail && <>: <b>{detail}</b></>}</span>
-                <XIcon />
-              </button>
+              <Badge asChild variant="secondary" key={key} className="h-[26px] cursor-pointer gap-1.5 pr-1.5 pl-2.5 text-[13px] font-normal hover:bg-accent">
+                <button type="button" onClick={() => clearFilter(key)} aria-label={`Remove filter ${name}${detail ? ` ${detail}` : ""}`}>
+                  <span>{name}{detail && <>: <b className="font-medium">{detail}</b></>}</span>
+                  <X className="text-muted-foreground" aria-hidden="true" />
+                </button>
+              </Badge>
             );
           })}
-          <button type="button" className="link-btn" style={{ marginLeft: 6, fontSize: 13 }} onClick={resetFilters}>Clear all</button>
+          <Button variant="link" size="sm" className="h-auto px-1.5 text-[13px] text-foreground" onClick={resetFilters}>Clear all</Button>
         </div>
       )}
     </section>

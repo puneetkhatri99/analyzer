@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { count, longDate } from "./format.js";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const PURPOSES = { extract: "Job extraction", church_lookup: "Church size lookup" };
 
@@ -22,12 +25,12 @@ export default function AiCosts() {
   }, []);
 
   if (error) return <p className="form-error" role="alert">{error}</p>;
-  if (!data) return <section className="card" aria-busy="true"><span className="skeleton" style={{ width: 240 }}>Loading</span></section>;
+  if (!data) return <Card aria-busy="true"><Skeleton className="h-5 w-60" /></Card>;
 
   const t = data.totals;
   return (
     <>
-      <section className="card kpis cost-kpis">
+      <Card className="kpis cost-kpis">
         <div className="kpi">
           <div className="kpi-label">Total AI spend</div>
           <div className="kpi-value lead num">{usd(t.total)}</div>
@@ -48,73 +51,71 @@ export default function AiCosts() {
           <div className="kpi-value num">{count(Number(t.input_tokens) + Number(t.output_tokens))}</div>
           <div className="kpi-sub">{count(t.input_tokens)} in · {count(t.output_tokens)} out</div>
         </div>
-      </section>
+      </Card>
 
       <div className="cost-grid">
-        <section className="card">
-          <div className="card-head"><h2>By purpose</h2></div>
+        <Card>
+          <CardHeader><CardTitle>By purpose</CardTitle></CardHeader>
           {data.by_purpose.length === 0 ? <p className="empty-line">No AI calls yet.</p> : (
-            <table className="plain-table">
-              <thead><tr><th>Purpose</th><th className="r">Calls</th><th className="r">Avg per call</th><th className="r">Total</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader><TableRow><TableHead>Purpose</TableHead><TableHead className="text-right">Calls</TableHead><TableHead className="text-right">Avg per call</TableHead><TableHead className="text-right">Total</TableHead></TableRow></TableHeader>
+              <TableBody>
                 {data.by_purpose.map((p) => (
-                  <tr key={p.purpose}>
-                    <td>{PURPOSES[p.purpose] || p.purpose}</td>
-                    <td className="r num">{count(p.calls)}</td>
-                    <td className="r num">{usd(p.avg_cost)}</td>
-                    <td className="r num">{usd(p.cost)}</td>
-                  </tr>
+                  <TableRow key={p.purpose}>
+                    <TableCell>{PURPOSES[p.purpose] || p.purpose}</TableCell>
+                    <TableCell className="num text-right">{count(p.calls)}</TableCell>
+                    <TableCell className="num text-right">{usd(p.avg_cost)}</TableCell>
+                    <TableCell className="num text-right">{usd(p.cost)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
-        </section>
+        </Card>
 
-        <section className="card">
-          <div className="card-head"><h2>By day</h2><span className="meta">Last 30 days</span></div>
+        <Card>
+          <CardHeader><CardTitle>By day</CardTitle><CardDescription>Last 30 days</CardDescription></CardHeader>
           {data.by_day.length === 0 ? <p className="empty-line">No AI calls in the last 30 days.</p> : (
-            <table className="plain-table">
-              <thead><tr><th>Day</th><th className="r">Calls</th><th className="r">Spend</th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader><TableRow><TableHead>Day</TableHead><TableHead className="text-right">Calls</TableHead><TableHead className="text-right">Spend</TableHead></TableRow></TableHeader>
+              <TableBody>
                 {data.by_day.map((d) => (
-                  <tr key={d.day}><td>{longDate(d.day)}</td><td className="r num">{count(d.calls)}</td><td className="r num">{usd(d.cost)}</td></tr>
+                  <TableRow key={d.day}><TableCell>{longDate(d.day)}</TableCell><TableCell className="num text-right">{count(d.calls)}</TableCell><TableCell className="num text-right">{usd(d.cost)}</TableCell></TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
-        </section>
+        </Card>
       </div>
 
-      <section className="card">
-        <div className="card-head"><h2>Recent AI calls</h2><span className="meta">Latest {count(data.recent.length)}</span></div>
+      <Card>
+        <CardHeader><CardTitle>Recent AI calls</CardTitle><CardDescription>Latest {count(data.recent.length)}</CardDescription></CardHeader>
         {data.recent.length === 0 ? <p className="empty-line">No AI calls yet.</p> : (
-          <div className="table-scroll">
-            <table className="plain-table">
-              <thead>
-                <tr><th>When</th><th>Purpose</th><th>Job URL</th><th>Admin</th><th className="r">Tokens in / out</th><th className="r">Searches</th><th className="r">Cost</th></tr>
-              </thead>
-              <tbody>
+                      <Table>
+              <TableHeader>
+                <TableRow><TableHead>When</TableHead><TableHead>Purpose</TableHead><TableHead>Job URL</TableHead><TableHead>Admin</TableHead><TableHead className="text-right">Tokens in / out</TableHead><TableHead className="text-right">Searches</TableHead><TableHead className="text-right">Cost</TableHead></TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.recent.map((r, i) => (
-                  <tr key={i}>
-                    <td className="nowrap">{when(r.created_at)}</td>
-                    <td className="nowrap">{PURPOSES[r.purpose] || r.purpose}</td>
-                    <td className="url-cell"><a href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>{r.url}</a></td>
-                    <td className="muted">{r.admin_email}</td>
-                    <td className="r num nowrap">{count(r.input_tokens)} / {count(r.output_tokens)}</td>
-                    <td className="r num">{r.web_searches}</td>
-                    <td className="r num">{r.cost_usd == null ? "—" : usd(r.cost_usd)}</td>
-                  </tr>
+                  <TableRow key={i}>
+                    <TableCell>{when(r.created_at)}</TableCell>
+                    <TableCell>{PURPOSES[r.purpose] || r.purpose}</TableCell>
+                    <TableCell className="url-cell"><a href={r.url} target="_blank" rel="noopener noreferrer" title={r.url}>{r.url}</a></TableCell>
+                    <TableCell className="muted">{r.admin_email}</TableCell>
+                    <TableCell className="num text-right">{count(r.input_tokens)} / {count(r.output_tokens)}</TableCell>
+                    <TableCell className="num text-right">{r.web_searches}</TableCell>
+                    <TableCell className="num text-right">{r.cost_usd == null ? "—" : usd(r.cost_usd)}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
         )}
         <p className="card-note">
           Estimated from the token counts OpenAI returns for each call and list prices
           ($0.75 / $4.50 per million input / output tokens for gpt-5.4-mini, 1¢ per web search).
           Your OpenAI billing page is the exact figure.{Number(t.unpriced) > 0 && ` ${count(t.unpriced)} calls used a model without a known price and aren’t counted.`}
         </p>
-      </section>
+      </Card>
     </>
   );
 }

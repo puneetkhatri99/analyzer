@@ -1,15 +1,17 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
+// `as` lets a card be a <section> or <form>
 function Card({
   className,
+  as: Comp = "div",
   ...props
 }) {
   return (
-    <div
+    <Comp
       data-slot="card"
       className={cn(
-        "flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm",
+        "flex min-w-0 flex-col rounded-lg border bg-card p-5 text-card-foreground",
         className
       )}
       {...props}
@@ -25,7 +27,7 @@ function CardHeader({
     <div
       data-slot="card-header"
       className={cn(
-        "@container/card-header grid auto-rows-min grid-rows-[auto_auto] items-start gap-2 px-6 has-data-[slot=card-action]:grid-cols-[1fr_auto] [.border-b]:pb-6",
+        "mb-3.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1",
         className
       )}
       {...props}
@@ -38,9 +40,9 @@ function CardTitle({
   ...props
 }) {
   return (
-    <div
+    <h2
       data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
+      className={cn("m-0 text-base leading-6 font-semibold", className)}
       {...props}
     />
   )
@@ -53,7 +55,7 @@ function CardDescription({
   return (
     <div
       data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-xs whitespace-nowrap text-muted-foreground", className)}
       {...props}
     />
   )
@@ -82,7 +84,7 @@ function CardContent({
   return (
     <div
       data-slot="card-content"
-      className={cn("px-6", className)}
+      className={cn("min-w-0", className)}
       {...props}
     />
   )
@@ -95,7 +97,7 @@ function CardFooter({
   return (
     <div
       data-slot="card-footer"
-      className={cn("flex items-center px-6 [.border-t]:pt-6", className)}
+      className={cn("mt-auto flex items-center pt-3", className)}
       {...props}
     />
   )
