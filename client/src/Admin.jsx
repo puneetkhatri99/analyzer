@@ -4,6 +4,7 @@ import AiCosts from "./AiCosts.jsx";
 import AdminJobs from "./AdminJobs.jsx";
 import ChangePassword from "./ChangePassword.jsx";
 import Users from "./Users.jsx";
+import ProfileMenu from "./ProfileMenu.jsx";
 import { ORIGINS, count, listedPay } from "./format.js";
 
 const DATASETS = { churches: "BizDev churches", nonprofits: "BizDev nonprofits" };
@@ -165,8 +166,7 @@ function AddJob() {
 }
 
 // [key, label, lowest role that sees it]. The server enforces the same roles; hiding tabs is only for clarity.
-const TABS = [["jobs", "Jobs", "viewer"], ["add", "Add a job", "editor"], ["users", "Users", "admin"], ["costs", "AI costs", "admin"],
-  ["password", "My password", "viewer"]];
+const TABS = [["jobs", "Jobs", "viewer"], ["add", "Add a job", "editor"], ["users", "Users", "admin"], ["costs", "AI costs", "admin"]];
 const ROLES = ["viewer", "editor", "admin"];
 const ROLE_TEXT = { admin: "Admin", editor: "Read and write", viewer: "Read only" };
 const can = (user, role) => ROLES.indexOf(user.role) >= ROLES.indexOf(role);
@@ -184,16 +184,16 @@ export default function Admin() {
 
   const signOut = () => postJSON("/api/admin/logout", {}).finally(() => setUser(null));
   const tabs = TABS.filter(([, , role]) => can(user, role));
-  const current = tabs.some(([k]) => k === tab) ? tab : "jobs";
+  // "password" is opened from the profile menu, not from a tab
+  const current = tab === "password" || tabs.some(([k]) => k === tab) ? tab : "jobs";
   return (
     <>
       <header className="topbar admin-topbar">
         <div className="topbar-inner">
-          <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" /><span className="brand-name">Market Analysis Tool</span> <span className="muted">· {ROLE_TEXT[user.role]}</span></div>
+          <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" /><span className="brand-name">Market Analysis Tool</span></div>
           <div className="topbar-actions">
             <a href="/">Public tool</a>
-            <span className="muted">{user.email}</span>
-            <button type="button" className="link-btn" onClick={signOut}>Sign out</button>
+            <ProfileMenu email={user.email} roleText={ROLE_TEXT[user.role]} onChangePassword={() => showTab("password")} onSignOut={signOut} />
           </div>
         </div>
       </header>

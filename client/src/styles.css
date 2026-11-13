@@ -469,3 +469,19 @@ button.job-title { background: none; border: 0; padding: 0; font: inherit; font-
   .admin-topbar .topbar-actions { gap: 14px; }
   .admin-tabs { margin: 0 -16px 4px; padding: 0 16px; }
 }
+
+/* ---------- Profile menu (admin top bar) ---------- */
+.profile { position: relative; }
+.profile-button { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 4px; border-radius: 999px; cursor: pointer; color: var(--muted); }
+.profile-button:hover, .profile-button[aria-expanded="true"] { background: var(--active); color: var(--text); }
+.profile-button:focus-visible, .profile-item:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; display: inline-grid; place-items: center; font-weight: 600; font-size: 14px; flex: none; }
+.avatar.large { width: 40px; height: 40px; font-size: 17px; }
+.profile-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; width: min(300px, calc(100vw - 32px)); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: 0 12px 32px rgba(0, 0, 0, .12); padding: 6px; }
+.profile-who { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--rule); }
+.profile-who > span:last-child { display: grid; min-width: 0; }
+.profile-who strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-role { font-size: var(--fs-small); color: var(--muted); }
+.profile-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: var(--radius-control); padding: 9px 10px; font: inherit; color: var(--text); cursor: pointer; }
+.profile-item:hover { background: var(--hover); }
