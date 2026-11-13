@@ -54,17 +54,6 @@ function finding(filters, stats) {
   );
 }
 
-export function Mark() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
-      <rect width="24" height="24" rx="6" fill="#141414" />
-      <rect x="6" y="7" width="12" height="2" rx="1" fill="#fff" />
-      <rect x="6" y="11" width="8" height="2" rx="1" fill="#fff" />
-      <rect x="6" y="15" width="10" height="2" rx="1" fill="#fff" />
-    </svg>
-  );
-}
-
 function LoadingCard({ className, title, rows = 6 }) {
   return (
     <section className={`card ${className}`} aria-busy="true">
@@ -78,7 +67,8 @@ function LoadingCard({ className, title, rows = 6 }) {
   );
 }
 
-export default function App() {
+// Admin only (brief A1, A2): the per-source view with every posting, its source and its link.
+export default function AdminJobs() {
   const [source, setSource] = useState(sourceFromUrl);
   const [sources, setSources] = useState(null);
   const [filters, setFilters] = useState(filtersFromUrl);
@@ -137,22 +127,12 @@ export default function App() {
 
   return (
     <>
-      <header className="topbar">
-        <div className="topbar-inner">
-          <div className="brand"><Mark />Ministry Jobs Analyser</div>
-          <div className="topbar-actions">
-            <div className="freshness">{current?.label || "…"} · {source === "json" ? "data as of" : "pages last read"} {s?.as_of ? longDate(s.as_of) : "…"}</div>
-            <a className="btn" href="/admin">Admin</a>
-          </div>
-        </div>
-      </header>
-
-      <main className="canvas">
         <SourceTabs sources={sources} value={source} onChange={changeSource} />
 
         <div className="title-row">
           <div>
-            <h1>Salary benchmarks</h1>
+            <h1>Jobs by source</h1>
+            <p className="muted small">{current?.label || "…"} · {source === "json" ? "data as of" : "pages last read"} {s?.as_of ? longDate(s.as_of) : "…"}</p>
             <p className="finding" aria-live="polite">
               {s ? finding(filters, s) : <span className="skeleton" style={{ width: 520 }}>Loading</span>}
             </p>
@@ -245,7 +225,6 @@ export default function App() {
             </section>
           </div>
         )}
-      </main>
       {openJob && (
         <JobDetail
           job={openJob}

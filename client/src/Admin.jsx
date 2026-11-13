@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Mark } from "./App.jsx";
 import { postJSON } from "./api.js";
 import AiCosts from "./AiCosts.jsx";
+import AdminJobs from "./AdminJobs.jsx";
 import { ORIGINS, count, listedPay } from "./format.js";
 
 const DATASETS = { churches: "BizDev churches", nonprofits: "BizDev nonprofits" };
@@ -25,14 +25,8 @@ function Login({ onSignedIn }) {
   return (
     <main className="login">
       <form className="card login-card" onSubmit={submit}>
-        <div className="brand"><Mark />Ministry Jobs Analyser</div>
+        <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" />Market Analysis Tool</div>
         <h1>Admin sign in</h1>
-        {/* TEMPORARY: reference login for testing. Delete this block before go-live. */}
-        <div className="notice demo-login" role="note">
-          <strong>Reference login</strong>
-          <span>Email: <code>admin@example.com</code></span>
-          <span>Password: <code>admin@123</code></span>
-        </div>
         <label className="field">
           <span>Email</span>
           <input className="control" type="email" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -43,7 +37,7 @@ function Login({ onSignedIn }) {
         </label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
-        <a className="muted small" href="/">Back to the dashboard</a>
+        <a className="muted small" href="/">Back to the public tool</a>
       </form>
     </main>
   );
@@ -168,10 +162,12 @@ function AddJob() {
   );
 }
 
+const TABS = [["jobs", "Jobs"], ["add", "Add a job"], ["costs", "AI costs"]];
+
 export default function Admin() {
   const [email, setEmail] = useState(undefined); // undefined = checking, null = signed out
-  const [tab, setTab] = useState(window.location.hash === "#costs" ? "costs" : "add");
-  const showTab = (next) => { setTab(next); window.history.replaceState(null, "", next === "costs" ? "#costs" : window.location.pathname); };
+  const [tab, setTab] = useState(TABS.some(([k]) => `#${k}` === window.location.hash) ? window.location.hash.slice(1) : "jobs");
+  const showTab = (next) => { setTab(next); window.history.replaceState(null, "", next === "jobs" ? window.location.pathname : `#${next}`); };
 
   useEffect(() => {
     fetch("/api/admin/me").then((r) => (r.ok ? r.json() : null)).then((r) => setEmail(r?.email ?? null)).catch(() => setEmail(null));
@@ -185,9 +181,9 @@ export default function Admin() {
     <>
       <header className="topbar">
         <div className="topbar-inner">
-          <div className="brand"><Mark />Ministry Jobs Analyser <span className="muted">· Admin</span></div>
+          <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" />Market Analysis Tool <span className="muted">· Admin</span></div>
           <div className="topbar-actions">
-            <a href="/">Analyser</a>
+            <a href="/">Public tool</a>
             <span className="muted">{email}</span>
             <button type="button" className="link-btn" onClick={signOut}>Sign out</button>
           </div>
@@ -195,11 +191,11 @@ export default function Admin() {
       </header>
       <main className="canvas admin">
         <nav className="admin-tabs" aria-label="Admin sections">
-          {[["add", "Add a job"], ["costs", "AI costs"]].map(([key, label]) => (
+          {TABS.map(([key, label]) => (
             <button key={key} type="button" className="admin-tab" aria-current={tab === key ? "page" : undefined} onClick={() => showTab(key)}>{label}</button>
           ))}
         </nav>
-        {tab === "add" ? <AddJob /> : <AiCosts />}
+        {tab === "jobs" ? <AdminJobs /> : tab === "add" ? <AddJob /> : <AiCosts />}
       </main>
     </>
   );

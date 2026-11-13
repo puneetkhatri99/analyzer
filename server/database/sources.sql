@@ -113,3 +113,16 @@ CREATE TABLE IF NOT EXISTS ai_usage (
     cost_usd       numeric(12, 6)          -- null when the model's price isn't known
 );
 CREATE INDEX IF NOT EXISTS idx_ai_usage_created ON ai_usage (created_at);
+
+-- Visitors who signed up to see a report (brief P2). One row per email; a returning visitor updates it.
+-- The search they started with is kept for the MinistryHub team (role, location, attendance band).
+CREATE TABLE IF NOT EXISTS leads (
+    email          text PRIMARY KEY,          -- stored lowercase
+    name           text NOT NULL,
+    organization   text NOT NULL,
+    role           text,
+    location       text,
+    attendance     text,
+    created_at     timestamptz NOT NULL DEFAULT now(),
+    last_seen_at   timestamptz NOT NULL DEFAULT now()
+);

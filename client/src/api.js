@@ -30,3 +30,14 @@ export const fetchSources = () => getJSON("/api/sources");
 export const fetchFilterOptions = (source) => getJSON(`/api/filter-options?${toQuery({ source })}`);
 export const fetchSummary = (source, filters) => getJSON(`/api/summary?${toQuery({ source, ...filters })}`);
 export const fetchJobs = (source, filters) => getJSON(`/api/jobs?${toQuery({ source, ...filters })}`);
+
+// Public report. Lists go out as repeated keys: ?state=Ohio&state=Indiana
+export function reportQuery(f) {
+  const params = new URLSearchParams();
+  for (const key of ["role", "state", "size", "denomination"]) (f[key] || []).forEach((v) => params.append(key, v));
+  if (f.type && f.type !== "full-time") params.set("type", f.type);
+  return params.toString();
+}
+export const fetchReportOptions = () => getJSON("/api/report/options");
+export const fetchReport = (f) => getJSON(`/api/report?${reportQuery(f)}`);
+export const postLead = (lead) => postJSON("/api/leads", lead);

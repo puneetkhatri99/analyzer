@@ -76,6 +76,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; white-space: nowrap; }
 .brand svg { flex: none; }
+.brand-logo { height: 22px; width: auto; display: block; }
 .freshness { color: var(--muted); font-size: var(--fs-small); white-space: nowrap; }
 
 /* ---------- Canvas ---------- */
@@ -411,9 +412,6 @@ button.job-title { background: none; border: 0; padding: 0; font: inherit; font-
 .job-dialog .details { margin-top: 8px; }
 .job-dialog-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .job-dialog-foot a.btn { text-decoration: none; display: inline-flex; align-items: center; }
-.demo-login { border: 1px solid var(--notice-border); border-radius: var(--radius-control); padding: 10px 12px; display: flex;
-  flex-direction: column; gap: 2px; font-size: 13px; }
-.demo-login code { font-family: ui-monospace, monospace; }
 
 /* ---------- Admin tabs and AI costs ---------- */
 .admin-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
