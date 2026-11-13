@@ -6,21 +6,19 @@
 
 ## Goal
 
-Load the church jobs JSON feed into Postgres and fill in the facts the feed
-doesn't have: canonical role, denomination and church size.
+Load the church jobs JSON feed into Postgres. Denomination and church size come from a one-off enrichment pass
+(below); roles come from keyword rules on the title.
 
 ## How it works
 
 `pipeline/ingest.py` walks the feed once. For each posting it:
 
 1. Upserts the company (`repository.upsert_company`).
-2. If the company hasn't been enriched in 90 days, fetches the church's homepage
-   (`fetch_company.py`) and asks Claude for denomination and church size
-   (`enrich.extract_church_info`). Only explicitly stated facts are kept.
-3. Classifies the raw job title into the fixed role taxonomy in
-   `app/roles.py`, cached per distinct title (`enrich.classify_title`).
-4. Upserts the posting, then a snapshot for this pull date with salary parsed
-   from `comp_range` (`enrich.parse_salary`).
+2. Inserts the posting if it's new.
+3. Upserts a snapshot for this pull date, with salary parsed from `comp_range`
+   (`enrich.parse_salary`).
+
+The job's role isn't stored: the API works it out from the title with keyword rules (`app/roles.py`).
 
 Every write is an idempotent upsert, so re-running the same feed is safe and
 fills in whatever was skipped before.
@@ -29,8 +27,7 @@ fills in whatever was skipped before.
 |---|---|
 | `ingest.py` | CLI entry point; orchestrates one pass over the feed |
 | `repository.py` | all database writes |
-| `enrich.py` | Claude calls (title → role, text → denomination/size) and salary parsing |
-| `fetch_company.py` | fetches a church homepage as plain text |
+| `enrich.py` | salary parsing |
 
 ## Run it
 
@@ -45,8 +42,8 @@ Against Neon, use the direct connection string (host without `-pooler`). The
 pooled endpoint shares sessions between clients, and a session setting such as
 the one `pg_dump` output sets can leak to other connections.
 
-Without `ANTHROPIC_API_KEY`, postings, location and salary still load. Role,
-denomination and church size stay null until a later run with the key set.
+Denomination and church size in `companies` come from earlier runs; the AI step that filled them was removed
+(no Anthropic key). Jobs from the BizDev sources get them from their job pages instead (`pipeline.fetch_jobs`).
 
 ## Current coverage
 
@@ -63,9 +60,7 @@ so re-running the pipeline will not repeat it.
 | Denomination | 105 / 562 companies (19%) |
 | Church size | 10 / 562 companies (2%) |
 
-Until the LLM classifies titles, the API groups roles with a keyword fallback
-(`bucket_role` in `app/roles.py`). Its labels differ slightly from the
-canonical taxonomy in the same file.
+The API groups roles with keyword rules (`bucket_role` in `app/roles.py`).
 
 ## Known issues
 

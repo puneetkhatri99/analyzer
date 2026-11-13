@@ -63,7 +63,6 @@ Interactive docs are at http://127.0.0.1:8000/docs.
 |---|---|---|
 | `DATABASE_URL` | yes | Postgres connection string |
 | `ALLOWED_ORIGIN` | production | the dashboard's URL for CORS; defaults to `*` |
-| `ANTHROPIC_API_KEY` | no | used by the pipeline only |
 
 The API re-queries all postings on every request. That takes a few ms at
 1,840 rows; add caching if the dataset grows by orders of magnitude.

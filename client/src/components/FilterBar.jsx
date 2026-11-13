@@ -8,7 +8,7 @@ const CHURCH_SIZES = [
 ];
 const MIN_PAY = [30000, 40000, 50000, 60000, 80000, 100000];
 const MORE_KEYS = ["status", "origin", "country", "remote", "min_salary", "has_pay"];
-const ORIGIN = { feed: "JSON feed", excel: "Excel import", admin: "Added by admin" };
+const ORIGIN = { feed: "JSON feed", excel: "Excel import", admin: "Added by admin", collector: "Auto-collected" };
 const STATUS = { open: "Still open", expired: "Expired", unverified: "Not verified" };
 
 function Select({ id, label, value, onChange, children }) {

@@ -10,8 +10,9 @@ __pycache__/
 node_modules/
 dist/
 
-# Logs
+# Logs (server/logs: job collector run logs and last-run counts)
 *.log
+server/logs/
 
 # Design inspection screenshots
 .taste-skill/

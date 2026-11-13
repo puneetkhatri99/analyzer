@@ -17,7 +17,7 @@ enrichment is cached once per company or per raw title, never per snapshot.
 | Table | One row per | Holds |
 |---|---|---|
 | `companies` | church / organization | name, URL, denomination, church size, when it was enriched |
-| `title_classifications` | distinct raw job title | canonical role from a fixed taxonomy |
+| `title_classifications` | distinct raw job title | unused: the AI title classifier was removed; roles come from `app/roles.py` |
 | `postings` | posting (`post_uuid`) | fields that don't change between pulls: title, role, location, hours, URL |
 | `posting_snapshots` | posting per pull date | salary and active status at that pull (the time series) |
 

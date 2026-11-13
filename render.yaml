@@ -14,3 +14,7 @@ services:
         value: "20"
       - key: DATABASE_URL
         sync: false   # your Neon connection string (the -pooler one)
+      - key: AXIOM_TOKEN
+        sync: false   # Axiom ingest token: logs are also sent to Axiom (server/app/logs.py)
+      - key: AXIOM_DATASET
+        value: analyzer
