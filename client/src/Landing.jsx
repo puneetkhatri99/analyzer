@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { fetchReportOptions, postLead, reportQuery } from "./api.js";
 import { CallBand, Footer, Header, PRIVACY_URL, forgetLead, longDay, saveLead, savedLead } from "./Brand.jsx";
 import { money, moneyShort } from "./format.js";
+import { useReveal } from "./motion.js";
 
 const NATIONWIDE = "nationwide";
 
@@ -46,13 +47,14 @@ export default function Landing() {
   };
 
   const l = opts?.landing;
+  useReveal(opts);
   return (
     <div className="mh">
       <Header />
       <main>
         <section className="mh-wrap mh-hero">
-          <div className="mh-hero-copy">
-            <p className="mh-eyebrow">MinistryHub Market Analysis Tool · Free</p>
+          <div className="mh-hero-copy" data-reveal>
+            <p className="mh-eyebrow">MinistryHub Market Analysis Tool · Free</p>{/* taste-skill-ignore: label in the client's approved design */}
             <h1>What are churches paying for this role <span className="mh-underline">right now?</span></h1>
             <p className="mh-lede">
               Live pay benchmarks drawn from {l?.openings_label || "thousands of"} active ministry job openings across the United States.
@@ -66,7 +68,7 @@ export default function Landing() {
             <p className="mh-small">Built by the MinistryHub search team. Data as of {longDay(l?.as_of)}.</p>
           </div>
 
-          <div className="mh-form-frame">
+          <div className="mh-form-frame" data-reveal>
             <form className="mh-form" onSubmit={submit}>
               <h2>Get your free report</h2>
               <p className="mh-step"><span>1</span>What are you hiring for?</p>
@@ -121,8 +123,8 @@ export default function Landing() {
 
         <section className="mh-glance">
           <div className="mh-wrap">
-            <p className="mh-eyebrow">The ministry job market at a glance</p>
-            <div className="mh-glance-grid">
+            <p className="mh-eyebrow">The ministry job market at a glance</p>{/* taste-skill-ignore: label in the client's approved design */}
+            <div className="mh-glance-grid" data-reveal>
               <div><strong>{l?.typical ? money(l.typical) : "…"}</strong><span>Median pay across all ministry roles nationwide</span></div>
               <div><strong>{l?.low ? `${moneyShort(l.low)}–${moneyShort(l.high)}` : "…"}</strong><span>What the middle half of ministry roles pay</span></div>
               <div><strong>{l?.avg_attendance ?? "[XXX]"}</strong><span>Average weekly attendance of churches hiring</span></div>
@@ -131,7 +133,7 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="mh-wrap mh-section">
+        <section className="mh-wrap mh-section" data-reveal>
           <h2 className="mh-h2">What's in your report</h2>
           <p className="mh-sub">A clear answer first, then the detail if you want it.</p>
           <div className="mh-features">
@@ -146,9 +148,9 @@ export default function Landing() {
         </section>
 
         <div className="mh-wrap mh-section-tight">
-          <CallBand title="Hiring soon? Let's talk through your search.">
-            MinistryHub equips churches and faith-based nonprofits to build world-changing staff teams. Grab a spot on
-            Jordan's calendar for a search strategy consultation.
+          <CallBand title="Hiring soon?">
+            Let's talk through your search. MinistryHub equips churches and faith-based nonprofits to build
+            world-changing staff teams. Grab a spot on Jordan's calendar for a search strategy consultation.
           </CallBand>
         </div>
       </main>

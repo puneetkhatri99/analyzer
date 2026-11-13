@@ -56,7 +56,7 @@ export function Footer() {
 
 export function CallBand({ title, children, secondary }) {
   return (
-    <section className="mh-band">
+    <section className="mh-band" data-reveal>
       <div>
         <h2>{title}</h2>
         <p>{children}</p>
