@@ -52,15 +52,42 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def require_admin(request: Request) -> str:
+# Roles, lowest first; each can do everything the ones before it can.
+#   viewer: read the dashboard. editor: also add and delete jobs. admin: also manage users and see AI costs.
+# Only admins create users (as viewer or editor), with a one-time password the user must change at first sign-in.
+# Admin accounts are made with pipeline.create_admin, never through the API.
+ROLES = ("viewer", "editor", "admin")
+MIN_PASSWORD = 8
+
+
+def signed_in(request: Request) -> dict:
+    """The signed-in user, even one who still has to change their password; 401 otherwise."""
     token = request.cookies.get(COOKIE)
     if token:
         with get_conn() as conn:
-            row = conn.execute("SELECT email FROM public.admin_sessions WHERE token_hash = %s AND expires_at > now()",
-                               (_token_hash(token),)).fetchone()
+            row = conn.execute(
+                """SELECT u.email, u.role, u.must_change_password FROM public.admin_sessions s
+                   JOIN public.admin_users u USING (email) WHERE s.token_hash = %s AND s.expires_at > now()""",
+                (_token_hash(token),)).fetchone()
         if row:
-            return row[0]
+            return {"email": row[0], "role": row[1], "must_change_password": row[2]}
     raise HTTPException(401, "Sign in required")
+
+
+def require_role(minimum: str):
+    def check(request: Request) -> str:
+        user = signed_in(request)
+        if user["must_change_password"]:
+            raise HTTPException(403, "Change your password first")
+        if ROLES.index(user["role"]) < ROLES.index(minimum):
+            raise HTTPException(403, "Your account doesn't have access to this")
+        return user["email"]
+    return check
+
+
+require_viewer = require_role("viewer")
+require_editor = require_role("editor")
+require_admin = require_role("admin")
 
 
 # shortcut: in-memory and per server process, so it resets on restart; move to the database if this runs on several instances
@@ -81,7 +108,8 @@ def login(body: Login, request: Request, response: Response):
         raise HTTPException(429, "Too many failed attempts. Try again in 15 minutes.")
     email = body.email.strip().lower()
     with get_conn() as conn:
-        row = conn.execute("SELECT password_hash FROM public.admin_users WHERE email = %s", (email,)).fetchone()
+        row = conn.execute("SELECT password_hash, role, must_change_password FROM public.admin_users WHERE email = %s",
+                           (email,)).fetchone()
         if not verify_password(body.password, row[0] if row else _DUMMY_HASH) or not row:
             _failures[ip] = recent + [time.time()]
             raise HTTPException(401, "Incorrect email or password")
@@ -92,7 +120,7 @@ def login(body: Login, request: Request, response: Response):
     _failures.pop(ip, None)
     response.set_cookie(COOKIE, token, max_age=SESSION_SECONDS, httponly=True, samesite="strict",
                         secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https")
-    return {"email": email}
+    return {"email": email, "role": row[1], "must_change_password": row[2]}
 
 
 @router.post("/logout")
@@ -106,8 +134,111 @@ def logout(request: Request, response: Response):
 
 
 @router.get("/me")
-def me(email: str = Depends(require_admin)):
-    return {"email": email}
+def me(user: dict = Depends(signed_in)):
+    return user
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/password")
+def change_password(body: PasswordChange, request: Request, user: dict = Depends(signed_in)):
+    """Every user changes their own password; a first sign-in with an admin-given password must do this first."""
+    if len(body.new_password) < MIN_PASSWORD:
+        raise HTTPException(422, f"Use at least {MIN_PASSWORD} characters.")
+    if body.new_password == body.current_password:
+        raise HTTPException(422, "Choose a password different from the current one.")
+    with get_conn() as conn:
+        stored = conn.execute("SELECT password_hash FROM public.admin_users WHERE email = %s", (user["email"],)).fetchone()[0]
+        if not verify_password(body.current_password, stored):
+            raise HTTPException(401, "Your current password is incorrect")
+        conn.execute("UPDATE public.admin_users SET password_hash = %s, must_change_password = false WHERE email = %s",
+                     (hash_password(body.new_password), user["email"]))
+        # sign out this user's other sessions; the one making the change stays signed in
+        conn.execute("DELETE FROM public.admin_sessions WHERE email = %s AND token_hash <> %s",
+                     (user["email"], _token_hash(request.cookies.get(COOKIE, ""))))
+    return {"ok": True}
+
+
+# ---------- users (admins only) ----------
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class NewUser(BaseModel):
+    email: str
+    role: Literal["viewer", "editor"]
+    password: str  # one-time; the user must change it at first sign-in
+
+
+class UserChange(BaseModel):
+    role: Optional[Literal["viewer", "editor"]] = None
+    password: Optional[str] = None  # a new one-time password
+
+
+def _managed_user(conn, email: str) -> str:
+    """A user an admin may change: exists and isn't an admin (admins are managed with pipeline.create_admin)."""
+    email = email.strip().lower()
+    row = conn.execute("SELECT role FROM public.admin_users WHERE email = %s", (email,)).fetchone()
+    if not row:
+        raise HTTPException(404, "No such user")
+    if row[0] == "admin":
+        raise HTTPException(403, "Admin accounts can't be changed here")
+    return email
+
+
+def _check_new_password(password: str) -> None:
+    if len(password) < MIN_PASSWORD:
+        raise HTTPException(422, f"Use a password of at least {MIN_PASSWORD} characters.")
+
+
+@router.get("/users")
+def list_users(_: str = Depends(require_admin)):
+    with get_conn() as conn:
+        rows = conn.execute("""SELECT email, role, must_change_password, created_by, created_at FROM public.admin_users
+                               ORDER BY array_position(ARRAY['admin', 'editor', 'viewer'], role), email""").fetchall()
+    return [dict(zip(["email", "role", "must_change_password", "created_by", "created_at"], r)) for r in rows]
+
+
+@router.post("/users")
+def create_user(body: NewUser, admin_email: str = Depends(require_admin)):
+    email = body.email.strip().lower()
+    if not EMAIL_RE.match(email):
+        raise HTTPException(422, "Enter a valid email address.")
+    _check_new_password(body.password)
+    with get_conn() as conn:
+        added = conn.execute(
+            """INSERT INTO public.admin_users (email, password_hash, role, must_change_password, created_by)
+               VALUES (%s, %s, %s, true, %s) ON CONFLICT (email) DO NOTHING RETURNING email""",
+            (email, hash_password(body.password), body.role, admin_email)).fetchone()
+    if not added:
+        raise HTTPException(409, "A user with this email already exists")
+    return {"email": email, "role": body.role}
+
+
+@router.patch("/users/{email}")
+def change_user(email: str, body: UserChange, _: str = Depends(require_admin)):
+    if body.password is not None:
+        _check_new_password(body.password)
+    with get_conn() as conn:
+        email = _managed_user(conn, email)
+        if body.role:
+            conn.execute("UPDATE public.admin_users SET role = %s WHERE email = %s", (body.role, email))
+        if body.password is not None:
+            conn.execute("UPDATE public.admin_users SET password_hash = %s, must_change_password = true WHERE email = %s",
+                         (hash_password(body.password), email))
+            conn.execute("DELETE FROM public.admin_sessions WHERE email = %s", (email,))
+    return {"ok": True}
+
+
+@router.delete("/users/{email}")
+def delete_user(email: str, _: str = Depends(require_admin)):
+    with get_conn() as conn:
+        email = _managed_user(conn, email)
+        conn.execute("DELETE FROM public.admin_users WHERE email = %s", (email,))  # sessions go too (ON DELETE CASCADE)
+    return {"ok": True}
 
 
 # ---------- extraction ----------
@@ -333,7 +464,7 @@ class ExtractRequest(BaseModel):
 
 
 @router.post("/extract")
-def extract(body: ExtractRequest, admin_email: str = Depends(require_admin)):
+def extract(body: ExtractRequest, admin_email: str = Depends(require_editor)):
     if not OPENAI_API_KEY:
         raise HTTPException(503, "OPENAI_API_KEY is not set on the server")
     url = str(body.url)
@@ -387,7 +518,7 @@ FIELDS = ["job_title", "org_name", "org_website", "city", "state", "date_posted"
 
 
 @router.post("/jobs")
-def save(body: SaveRequest, admin_email: str = Depends(require_admin)):
+def save(body: SaveRequest, admin_email: str = Depends(require_editor)):
     job, _ = validate(body.job)  # the job comes back from the browser, so it is checked again
     if job.page_type != "job_posting":
         raise HTTPException(400, "Only job postings can be saved")
@@ -409,6 +540,22 @@ def save(body: SaveRequest, admin_email: str = Depends(require_admin)):
             {**row, "url_key": url_key(url), "job_url": url, "added_via": f"admin_{body.method}", "added_by": admin_email},
         )
     return {"saved": True, "dataset": body.dataset}
+
+
+@router.delete("/jobs")
+def delete_job(source: Literal["json", "churches", "nonprofits"], id: str, _: str = Depends(require_editor)):
+    """Remove one job for good. `id` is the row's post_uuid in /api/jobs (the url_key for the BizDev sheets).
+    A job still in the feed or the Excel sheet comes back the next time that is imported."""
+    with get_conn() as conn:
+        if source == "json":
+            conn.execute("DELETE FROM public.posting_checks WHERE post_uuid = %s", (id,))
+            conn.execute("DELETE FROM public.posting_snapshots WHERE post_uuid = %s", (id,))
+            gone = conn.execute("DELETE FROM public.postings WHERE post_uuid = %s RETURNING 1", (id,)).fetchone()
+        else:
+            gone = conn.execute(f"DELETE FROM public.{TABLES[source]} WHERE url_key = %s RETURNING 1", (id,)).fetchone()
+    if not gone:
+        raise HTTPException(404, "No such job")
+    return {"deleted": True}
 
 
 # ---------- AI costs page ----------

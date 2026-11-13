@@ -103,23 +103,23 @@ def save_lead(lead: Lead):
 
 # ---------- admin only: per-source view, postings and links (brief A1, A2) ----------
 
-@app.get("/api/sources", dependencies=[Depends(admin.require_admin)])
+@app.get("/api/sources", dependencies=[Depends(admin.require_viewer)])
 def sources():
     return jobs.source_counts()
 
 
-@app.get("/api/filter-options", dependencies=[Depends(admin.require_admin)])
+@app.get("/api/filter-options", dependencies=[Depends(admin.require_viewer)])
 def filter_options(source: Source = "json"):
     return jobs.build_filter_options(jobs.load_jobs(source))
 
 
-@app.get("/api/jobs", dependencies=[Depends(admin.require_admin)])
+@app.get("/api/jobs", dependencies=[Depends(admin.require_viewer)])
 def list_jobs(source: Source = "json", filters: dict = Depends(job_filters)):
     rows = jobs.apply_filters(jobs.load_jobs(source), filters)
     return {"total": len(rows), "rows": rows}
 
 
-@app.get("/api/summary", dependencies=[Depends(admin.require_admin)])
+@app.get("/api/summary", dependencies=[Depends(admin.require_viewer)])
 def summary(source: Source = "json", filters: dict = Depends(job_filters)):
     all_jobs = jobs.load_jobs(source)
     return jobs.build_summary(

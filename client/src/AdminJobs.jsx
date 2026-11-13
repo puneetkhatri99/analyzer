@@ -7,7 +7,7 @@ import PayDistribution from "./components/PayDistribution.jsx";
 import JobsTable from "./components/JobsTable.jsx";
 import SourceTabs from "./components/SourceTabs.jsx";
 import JobDetail from "./components/JobDetail.jsx";
-import { fetchFilterOptions, fetchJobs, fetchSources, fetchSummary, toQuery } from "./api.js";
+import { fetchFilterOptions, fetchJobs, fetchSources, fetchSummary, postJSON, toQuery } from "./api.js";
 import { MIN_PAID, count, longDate, money } from "./format.js";
 
 const EMPTY_FILTERS = {
@@ -68,7 +68,7 @@ function LoadingCard({ className, title, rows = 6 }) {
 }
 
 // Admin only (brief A1, A2): the per-source view with every posting, its source and its link.
-export default function AdminJobs() {
+export default function AdminJobs({ canEdit = false }) {
   const [source, setSource] = useState(sourceFromUrl);
   const [sources, setSources] = useState(null);
   const [filters, setFilters] = useState(filtersFromUrl);
@@ -228,6 +228,8 @@ export default function AdminJobs() {
       {openJob && (
         <JobDetail
           job={openJob}
+          onDelete={canEdit ? () => postJSON(`/api/admin/jobs?${toQuery({ source, id: openJob.post_uuid })}`, undefined, "DELETE")
+            .then(() => { setOpenJob(null); load(source, filters); fetchSources().then(setSources).catch(() => {}); }) : null}
           onClose={() => {
             // The table may redraw its rows while the dialog is open, so find the row again to return focus to it.
             table?.getRow(openJob.post_uuid)?.getElement?.().querySelector("button.job-title")?.focus();

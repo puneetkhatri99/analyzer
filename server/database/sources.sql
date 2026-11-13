@@ -90,6 +90,13 @@ CREATE TABLE IF NOT EXISTS admin_users (
     password_hash  text NOT NULL,
     created_at     timestamptz NOT NULL DEFAULT now()
 );
+-- Roles (app/admin.py): viewer reads, editor also adds and deletes jobs, admin also manages users and AI costs.
+-- Accounts that existed before roles were admins, so the default keeps them admins.
+-- Users created by an admin get a one-time password and must change it at first sign-in.
+ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'admin'
+    CHECK (role IN ('viewer', 'editor', 'admin'));
+ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
+ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_by text;  -- the admin who created this user; null for admins
 -- Signed-in sessions. Only a SHA-256 of the cookie token is kept; deleting a row signs that session out.
 CREATE TABLE IF NOT EXISTS admin_sessions (
     token_hash  text PRIMARY KEY,

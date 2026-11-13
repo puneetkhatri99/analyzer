@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { postJSON } from "./api.js";
 import AiCosts from "./AiCosts.jsx";
 import AdminJobs from "./AdminJobs.jsx";
+import ChangePassword from "./ChangePassword.jsx";
+import Users from "./Users.jsx";
 import { ORIGINS, count, listedPay } from "./format.js";
 
 const DATASETS = { churches: "BizDev churches", nonprofits: "BizDev nonprofits" };
@@ -17,7 +19,7 @@ function Login({ onSignedIn }) {
     setBusy(true);
     setError(null);
     postJSON("/api/admin/login", { email, password })
-      .then((r) => onSignedIn(r.email))
+      .then(onSignedIn)
       .catch((err) => setError(err.message))
       .finally(() => setBusy(false));
   };
@@ -162,41 +164,55 @@ function AddJob() {
   );
 }
 
-const TABS = [["jobs", "Jobs"], ["add", "Add a job"], ["costs", "AI costs"]];
+// [key, label, lowest role that sees it]. The server enforces the same roles; hiding tabs is only for clarity.
+const TABS = [["jobs", "Jobs", "viewer"], ["add", "Add a job", "editor"], ["users", "Users", "admin"], ["costs", "AI costs", "admin"],
+  ["password", "My password", "viewer"]];
+const ROLES = ["viewer", "editor", "admin"];
+const ROLE_TEXT = { admin: "Admin", editor: "Read and write", viewer: "Read only" };
+const can = (user, role) => ROLES.indexOf(user.role) >= ROLES.indexOf(role);
 
 export default function Admin() {
-  const [email, setEmail] = useState(undefined); // undefined = checking, null = signed out
-  const [tab, setTab] = useState(TABS.some(([k]) => `#${k}` === window.location.hash) ? window.location.hash.slice(1) : "jobs");
+  const [user, setUser] = useState(undefined); // undefined = checking, null = signed out
+  const [tab, setTab] = useState(window.location.hash.slice(1) || "jobs");
   const showTab = (next) => { setTab(next); window.history.replaceState(null, "", next === "jobs" ? window.location.pathname : `#${next}`); };
+  const refresh = () => fetch("/api/admin/me").then((r) => (r.ok ? r.json() : null)).then(setUser).catch(() => setUser(null));
 
-  useEffect(() => {
-    fetch("/api/admin/me").then((r) => (r.ok ? r.json() : null)).then((r) => setEmail(r?.email ?? null)).catch(() => setEmail(null));
-  }, []);
+  useEffect(() => { refresh(); }, []);
 
-  if (email === undefined) return null;
-  if (!email) return <Login onSignedIn={setEmail} />;
+  if (user === undefined) return null;
+  if (!user) return <Login onSignedIn={setUser} />;
 
-  const signOut = () => postJSON("/api/admin/logout", {}).finally(() => setEmail(null));
+  const signOut = () => postJSON("/api/admin/logout", {}).finally(() => setUser(null));
+  const tabs = TABS.filter(([, , role]) => can(user, role));
+  const current = tabs.some(([k]) => k === tab) ? tab : "jobs";
   return (
     <>
       <header className="topbar">
         <div className="topbar-inner">
-          <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" />Market Analysis Tool <span className="muted">· Admin</span></div>
+          <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" />Market Analysis Tool <span className="muted">· {ROLE_TEXT[user.role]}</span></div>
           <div className="topbar-actions">
             <a href="/">Public tool</a>
-            <span className="muted">{email}</span>
+            <span className="muted">{user.email}</span>
             <button type="button" className="link-btn" onClick={signOut}>Sign out</button>
           </div>
         </div>
       </header>
-      <main className="canvas admin">
-        <nav className="admin-tabs" aria-label="Admin sections">
-          {TABS.map(([key, label]) => (
-            <button key={key} type="button" className="admin-tab" aria-current={tab === key ? "page" : undefined} onClick={() => showTab(key)}>{label}</button>
-          ))}
-        </nav>
-        {tab === "jobs" ? <AdminJobs /> : tab === "add" ? <AddJob /> : <AiCosts />}
-      </main>
+      {user.must_change_password ? (
+        <main className="login"><ChangePassword forced onDone={refresh} /></main>
+      ) : (
+        <main className="canvas admin">
+          <nav className="admin-tabs" aria-label="Admin sections">
+            {tabs.map(([key, label]) => (
+              <button key={key} type="button" className="admin-tab" aria-current={current === key ? "page" : undefined} onClick={() => showTab(key)}>{label}</button>
+            ))}
+          </nav>
+          {current === "jobs" && <AdminJobs canEdit={can(user, "editor")} />}
+          {current === "add" && <AddJob />}
+          {current === "users" && <Users me={user.email} />}
+          {current === "costs" && <AiCosts />}
+          {current === "password" && <div className="password-page"><ChangePassword /></div>}
+        </main>
+      )}
     </>
   );
 }

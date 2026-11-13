@@ -1,4 +1,4 @@
-"""Create an admin account, or reset its password.
+"""Create an admin account, or reset its password (admins then add viewer and editor users in the admin panel).
 
 Usage (from the server/ directory; against Neon, set DATABASE_URL to it first):
   python -m pipeline.create_admin admin@example.com            # asks for the password
@@ -25,8 +25,9 @@ def main():
         sys.exit("Use a password of at least 8 characters.")
     with get_conn() as conn:
         conn.execute(SCHEMA.read_text(encoding="utf-8"))
-        conn.execute("""INSERT INTO public.admin_users (email, password_hash) VALUES (%s, %s)
-                        ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash""", (email, hash_password(password)))
+        conn.execute("""INSERT INTO public.admin_users (email, password_hash, role) VALUES (%s, %s, 'admin')
+                        ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'admin',
+                          must_change_password = false""", (email, hash_password(password)))
         conn.execute("DELETE FROM public.admin_sessions WHERE email = %s", (email,))
     print(f"Admin {email} saved.")
 

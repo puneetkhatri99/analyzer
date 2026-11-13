@@ -34,7 +34,7 @@ def _flow(monkeypatch):
     assert c.post("/api/admin/login", json={"email": EMAIL, "password": "nope"}).status_code == 401
     assert c.post("/api/admin/login", json={"email": "nobody@example.invalid", "password": PASSWORD}).status_code == 401
     assert c.post("/api/admin/login", json={"email": EMAIL.upper(), "password": PASSWORD}).status_code == 200
-    assert c.get("/api/admin/me").json() == {"email": EMAIL}
+    assert c.get("/api/admin/me").json() == {"email": EMAIL, "role": "admin", "must_change_password": False}
     with get_conn() as conn:  # only a hash of the cookie token is stored
         stored = conn.execute("SELECT token_hash FROM public.admin_sessions WHERE email = %s", (EMAIL,)).fetchone()[0]
     assert stored != c.cookies.get("admin_session") and len(stored) == 64

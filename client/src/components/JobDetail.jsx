@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ORIGINS, count, listedPay, longDate, money } from "../format.js";
 
 const yesNo = (v) => (v == null || v === "" ? null : String(v) === "true" ? "Yes" : "No");
@@ -9,8 +9,10 @@ function statusText(d) {
   return "Not verified · the job page couldn’t be checked";
 }
 
-export default function JobDetail({ job, onClose }) {
+// onDelete is given only to users who may delete (editors and admins); it returns a promise.
+export default function JobDetail({ job, onClose, onDelete }) {
   const dialog = useRef(null);
+  const [deleteError, setDeleteError] = useState(null);
   useEffect(() => {
     dialog.current?.showModal(); // native modal: traps focus, Esc closes
   }, []);
@@ -88,7 +90,12 @@ export default function JobDetail({ job, onClose }) {
             <a className="btn btn-primary" href={job.post_url} target="_blank" rel="noopener noreferrer">Open original posting ↗</a>
           )}
           <button type="button" className="btn" onClick={() => dialog.current.close()}>Close</button>
+          {onDelete && (
+            <button type="button" className="btn btn-danger" onClick={() => window.confirm(`Delete “${job.job_name || "this job"}” for good? It is removed from every view and report.`)
+              && onDelete().catch((e) => setDeleteError(e.message))}>Delete job</button>
+          )}
         </footer>
+        {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
       </div>
     </dialog>
   );
