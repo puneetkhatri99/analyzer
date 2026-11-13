@@ -1,0 +1,31 @@
+// The one place that talks HTTP. Empty base = same address as the page (FastAPI serves the app).
+const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+// Drops empty values, so a filter left at "any" is not sent.
+export function toQuery(params) {
+  const q = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== "" && v !== null && v !== undefined && v !== 0 && v !== false) q.set(k, v);
+  });
+  return q.toString();
+}
+
+async function request(path, { method = "GET", body } = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(typeof data.detail === "string" ? data.detail : `Request failed (${res.status})`);
+    error.status = res.status;
+    throw error;
+  }
+  return data;
+}
+
+export const getJSON = (path) => request(path);
+export const postJSON = (path, body = {}) => request(path, { method: "POST", body });
+export const patchJSON = (path, body) => request(path, { method: "PATCH", body });
+export const del = (path) => request(path, { method: "DELETE" });

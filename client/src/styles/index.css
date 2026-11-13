@@ -1,0 +1,94 @@
+@import "tailwindcss" source("..");  /* scan src only, not the whole repo */
+@import "tw-animate-css";
+
+/* shadcn/ui theme. Values come from our two existing palettes, so components keep the current look:
+   :root is the admin panel (styles.css), html[data-site="public"] is MinistryHub (public.css). main.jsx sets data-site.
+   Pop-ups render in <body>, outside .mh, which is why the public theme sits on <html>. */
+:root {
+  --radius: 8px;
+  --background: #f4f3f1;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #141414;
+  --primary-foreground: #ffffff;
+  --secondary: #eeeeee;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f7f6f4;
+  --muted-foreground: #6b6b6b;
+  --accent: #ecebe8;
+  --accent-foreground: #0a0a0a;
+  --destructive: #c4242a;
+  --border: #e6e5e2;
+  --input: #d4d4d4;
+  --ring: #1d5fbf;
+  --chart-1: #b9b8b4;
+  --chart-2: #1d5fbf;
+  --font-site: "Geist", Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html[data-site="public"] {
+  --radius: 10px;
+  --background: #ffffff;
+  --foreground: #1c1c1c;
+  --card: #ffffff;
+  --card-foreground: #1c1c1c;
+  --popover: #ffffff;
+  --popover-foreground: #1c1c1c;
+  --primary: #028082;
+  --primary-foreground: #ffffff;
+  --secondary: #fff6db;
+  --secondary-foreground: #000000;
+  --muted: #e6eeec;
+  --muted-foreground: #474747;
+  --accent: #d1eae4;
+  --accent-foreground: #005f60;
+  --destructive: #b42318;
+  --border: #dcebe7;
+  --input: #cfcfcf;
+  --ring: #028082;
+  --font-site: Montserrat, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+html[data-site="public"] body { font-family: var(--font-site); }
+
+@theme inline {
+  --font-sans: var(--font-site);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-brand-teal: #028082;
+  --color-brand-teal-dark: #005f60;
+  --color-brand-yellow: #ffc200;
+  --color-brand-cream: #fff6db;
+  --color-brand-mint: #d1eae4;
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  /* Tailwind's reset strips these, but the hand-written pages rely on the browser defaults. shadcn parts carry data-slot. */
+  p:not([data-slot]) { margin-block: revert; }
+  a:not([data-slot]) { text-decoration: revert; }
+}
