@@ -264,44 +264,45 @@ button.list-row:hover { background: var(--hover); }
 .skeleton { display: inline-block; background: var(--raised); border-radius: 4px; color: transparent; }
 .empty-line { border: 1px dashed var(--control); border-radius: var(--radius-card); padding: 10px 14px; color: var(--muted); font-size: 13px; }
 
-/* ---------- Table (Tabulator, restyled to rules and alignment) ---------- */
+/* ---------- Table (Tabulator, restyled to rules and alignment) ----------
+   Scoped under .table-card: Tabulator's stylesheet loads later with the admin bundle, so these must win on specificity. */
 .table-card { padding: 0; }
 .table-card .card-head { padding: var(--pad) var(--pad) 0; margin-bottom: 8px; }
-.tabulator { border: 0; background: transparent; font-size: var(--fs-body); font-family: var(--font); }
-.tabulator .tabulator-header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 400; }
-.tabulator .tabulator-header .tabulator-col { background: var(--surface); border-right: 0; }
-.tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: 10px 12px; }
-.tabulator .tabulator-header .tabulator-col .tabulator-col-title { font-size: var(--fs-small); font-weight: 400; }
-.tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover { background: var(--hover); }
-.tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter .tabulator-arrow { border-bottom-color: transparent; }
-.tabulator .tabulator-header .tabulator-col[aria-sort="ascending"] .tabulator-col-sorter .tabulator-arrow { border-bottom-color: var(--text); }
-.tabulator .tabulator-header .tabulator-col[aria-sort="descending"] .tabulator-col-sorter .tabulator-arrow { border-top-color: var(--text); }
-.tabulator .tabulator-header .tabulator-col.col-right .tabulator-col-title { text-align: right; }
-.tabulator .tabulator-tableholder { background: var(--surface); }
-.tabulator .tabulator-tableholder .tabulator-table { background: var(--surface); color: var(--text); }
-.tabulator-row { background: var(--surface); border-bottom: 1px solid var(--rule); min-height: 52px; }
-.tabulator-row.tabulator-row-even { background: var(--surface); }
-.tabulator-row.tabulator-selectable:hover, .tabulator-row:hover { background: var(--hover) !important; }
-.tabulator-row .tabulator-cell { border-right: 0; padding: 9px 12px; }
-.tabulator-row .tabulator-cell.col-right { text-align: right; }
-.tabulator .tabulator-placeholder .tabulator-placeholder-contents { color: var(--muted); font-size: var(--fs-body); font-weight: 400; padding: 40px 0; }
+.table-card .tabulator { border: 0; background: transparent; font-size: var(--fs-body); font-family: var(--font); }
+.table-card .tabulator .tabulator-header { background: var(--surface); border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 400; }
+.table-card .tabulator .tabulator-header .tabulator-col { background: var(--surface); border-right: 0; }
+.table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: 10px 12px; }
+.table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-title { font-size: var(--fs-small); font-weight: 400; }
+.table-card .tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover { background: var(--hover); }
+.table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter .tabulator-arrow { border-bottom-color: transparent; }
+.table-card .tabulator .tabulator-header .tabulator-col[aria-sort="ascending"] .tabulator-col-sorter .tabulator-arrow { border-bottom-color: var(--text); }
+.table-card .tabulator .tabulator-header .tabulator-col[aria-sort="descending"] .tabulator-col-sorter .tabulator-arrow { border-top-color: var(--text); }
+.table-card .tabulator .tabulator-header .tabulator-col.col-right .tabulator-col-title { text-align: right; }
+.table-card .tabulator .tabulator-tableholder { background: var(--surface); }
+.table-card .tabulator .tabulator-tableholder .tabulator-table { background: var(--surface); color: var(--text); }
+.table-card .tabulator-row { background: var(--surface); border-bottom: 1px solid var(--rule); min-height: 52px; }
+.table-card .tabulator-row.tabulator-row-even { background: var(--surface); }
+.table-card .tabulator-row.tabulator-selectable:hover, .table-card .tabulator-row:hover { background: var(--hover) !important; }
+.table-card .tabulator-row .tabulator-cell { border-right: 0; padding: 9px 12px; }
+.table-card .tabulator-row .tabulator-cell.col-right { text-align: right; }
+.table-card .tabulator .tabulator-placeholder .tabulator-placeholder-contents { color: var(--muted); font-size: var(--fs-body); font-weight: 400; padding: 40px 0; }
 .job-title { color: var(--text); font-weight: 500; text-decoration: none; }
 .job-title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .job-sub { color: var(--muted); font-size: 13px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
 .pay-unit { color: var(--muted); font-size: 12px; margin-left: 2px; }
 .dash { color: var(--muted); }
-.tabulator .tabulator-footer { background: var(--surface); border-top: 1px solid var(--border); color: var(--muted); padding: 10px 16px; border-radius: 0 0 var(--radius-card) var(--radius-card); font-weight: 400; }
-.tabulator .tabulator-footer .tabulator-page-counter { color: var(--muted); font-weight: 400; }
-.tabulator .tabulator-footer .tabulator-page-size { border: 1px solid var(--control); border-radius: var(--radius-control); padding: 4px 6px; background: var(--surface); color: var(--text); }
-.tabulator .tabulator-footer .tabulator-paginator { color: var(--muted); }
-.tabulator .tabulator-footer .tabulator-page {
+.table-card .tabulator .tabulator-footer { background: var(--surface); border-top: 1px solid var(--border); color: var(--muted); padding: 10px 16px; border-radius: 0 0 var(--radius-card) var(--radius-card); font-weight: 400; }
+.table-card .tabulator .tabulator-footer .tabulator-page-counter { color: var(--muted); font-weight: 400; }
+.table-card .tabulator .tabulator-footer .tabulator-page-size { border: 1px solid var(--control); border-radius: var(--radius-control); padding: 4px 6px; background: var(--surface); color: var(--text); }
+.table-card .tabulator .tabulator-footer .tabulator-paginator { color: var(--muted); }
+.table-card .tabulator .tabulator-footer .tabulator-page {
   border: 1px solid var(--control); border-radius: var(--radius-control); background: var(--surface); color: var(--text);
   padding: 4px 10px; margin: 0 2px; font-weight: 500;
 }
-.tabulator .tabulator-footer .tabulator-page:not(.disabled):hover { background: var(--hover); color: var(--text); cursor: pointer; }
-.tabulator .tabulator-footer .tabulator-page.active { background: var(--primary); border-color: var(--primary); color: #fff; }
-.tabulator .tabulator-footer .tabulator-page:disabled { opacity: 0.4; }
-.tabulator .tabulator-footer .tabulator-footer-contents { flex-wrap: wrap; gap: 8px; }
+.table-card .tabulator .tabulator-footer .tabulator-page:not(.disabled):hover { background: var(--hover); color: var(--text); cursor: pointer; }
+.table-card .tabulator .tabulator-footer .tabulator-page.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.table-card .tabulator .tabulator-footer .tabulator-page:disabled { opacity: 0.4; }
+.table-card .tabulator .tabulator-footer .tabulator-footer-contents { flex-wrap: wrap; gap: 8px; }
 
 /* ---------- Tablet ---------- */
 @media (max-width: 1100px) {
@@ -352,10 +353,10 @@ button.list-row:hover { background: var(--hover); }
 
   .card-head { flex-wrap: wrap; }
   .chart-box { min-height: 220px; }
-  .tabulator .tabulator-footer .tabulator-page-size,
-  .tabulator .tabulator-footer label,
-  .tabulator .tabulator-footer .tabulator-page[data-page="first"],
-  .tabulator .tabulator-footer .tabulator-page[data-page="last"] { display: none; }
+  .table-card .tabulator .tabulator-footer .tabulator-page-size,
+  .table-card .tabulator .tabulator-footer label,
+  .table-card .tabulator .tabulator-footer .tabulator-page[data-page="first"],
+  .table-card .tabulator .tabulator-footer .tabulator-page[data-page="last"] { display: none; }
 }
 
 /* ---------- Job status in the postings table ---------- */
@@ -396,7 +397,7 @@ button.list-row:hover { background: var(--hover); }
 .origin { font-size: var(--fs-small); color: var(--muted); white-space: nowrap; }
 
 /* ---------- Job details dialog ---------- */
-.tabulator-row { cursor: pointer; }
+.table-card .tabulator-row { cursor: pointer; }
 button.job-title { background: none; border: 0; padding: 0; font: inherit; font-weight: 500; text-align: left; cursor: pointer; color: var(--text); }
 .job-dialog { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--border);
   border-radius: var(--radius-card); background: var(--surface); color: var(--text); }
@@ -447,3 +448,9 @@ button.job-title { background: none; border: 0; padding: 0; font: inherit; font-
 .password-page { display: grid; justify-items: start; }
 .notice code { font-family: ui-monospace, monospace; font-size: 14px; font-weight: 600; }
 .user-done { align-self: flex-start; margin-top: 4px; }
+
+/* Job titles and pay wrap instead of being cut off; rows grow to fit. */
+.table-card .tabulator-row .tabulator-cell.col-wrap { white-space: normal; overflow-wrap: anywhere; }
+.table-card .tabulator-row .tabulator-cell { vertical-align: top; }
+.table-card .job-sub { white-space: nowrap; }
+.table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter .tabulator-arrow { border-top-color: transparent; }

@@ -16,7 +16,7 @@ const payText = (d) => {
 
 const COLUMNS = [
   {
-    title: "Job", field: "job_name", minWidth: 200, widthGrow: 3, responsive: 0,
+    title: "Job", field: "job_name", minWidth: 180, widthGrow: 3, responsive: 0, cssClass: "col-wrap",
     formatter: (cell) => {
       const d = cell.getData();
       const title = esc(d.job_name || "Untitled role");
@@ -24,11 +24,11 @@ const COLUMNS = [
       return `<button type="button" class="job-title">${title}</button><div class="job-sub">${esc(d.company_name || "Employer not stated")}</div>`;
     },
   },
-  { title: "Role", field: "role", minWidth: 150, widthGrow: 1, responsive: 2 },
-  { title: "Denomination", field: "denomination", minWidth: 140, widthGrow: 1, responsive: 4, formatter: (c) => esc(c.getValue()) || DASH },
-  { title: "Location", field: "region", minWidth: 150, widthGrow: 1, responsive: 1, formatter: (c) => esc(location(c.getData())) || DASH, accessorDownload: (_v, d) => location(d) },
+  { title: "Role", field: "role", minWidth: 150, widthGrow: 1.5, responsive: 2, tooltip: true },
+  { title: "Denomination", field: "denomination", minWidth: 140, widthGrow: 1, responsive: 4, tooltip: true, formatter: (c) => esc(c.getValue()) || DASH },
+  { title: "Location", field: "region", minWidth: 150, widthGrow: 1.5, responsive: 1, tooltip: (_e, c) => location(c.getData()), formatter: (c) => esc(location(c.getData())) || DASH, accessorDownload: (_v, d) => location(d) },
   {
-    title: "Pay", field: "salary_annual_mid", minWidth: 130, responsive: 0, hozAlign: "right", headerHozAlign: "right",
+    title: "Pay", field: "salary_annual_mid", minWidth: 120, responsive: 0, hozAlign: "right", headerHozAlign: "right", cssClass: "col-wrap",
     sorter: "number", sorterParams: { alignEmptyValues: "bottom" },
     formatter: (c) => {
       const p = listedPay(c.getData());
@@ -37,7 +37,7 @@ const COLUMNS = [
     accessorDownload: (_v, d) => payText(d),
   },
   {
-    title: "Status", field: "status", minWidth: 160, responsive: 3,
+    title: "Status", field: "status", minWidth: 120, responsive: 3,
     formatter: (c) => {
       const d = c.getData();
       if (d.status === "expired") return `<span class="status expired" title="${d.last_live_at ? `Last seen open ${isoDate(d.last_live_at)}` : "Never seen open"}">Expired <span class="num">${isoDate(d.expired_at)}</span></span>`;
@@ -47,7 +47,7 @@ const COLUMNS = [
     accessorDownload: (_v, d) => (d.status === "expired" ? `Expired ${isoDate(d.expired_at)}` : d.status === "open" ? "Open" : "Not verified"),
   },
   {
-    title: "Added via", field: "origin", minWidth: 140, responsive: 2,
+    title: "Added via", field: "origin", minWidth: 120, responsive: 2,
     formatter: (c) => `<span class="origin" title="Added ${isoDate(c.getData().added_at)}">${esc(ORIGINS[c.getValue()] || c.getValue())}</span>`,
     accessorDownload: (v) => ORIGINS[v] || v,
   },
