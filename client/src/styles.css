@@ -454,3 +454,18 @@ button.job-title { background: none; border: 0; padding: 0; font: inherit; font-
 .table-card .tabulator-row .tabulator-cell { vertical-align: top; }
 .table-card .job-sub { white-space: nowrap; }
 .table-card .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-sorter .tabulator-arrow { border-top-color: transparent; }
+
+/* ---------- Admin top bar and tabs ---------- */
+/* Same width as the admin content below, so the logo lines up with the tabs. */
+.admin-topbar .topbar-inner { max-width: calc(1100px + 64px); }
+/* Tabs stay on one line; on a narrow screen the row scrolls sideways instead of wrapping words. */
+.admin-tabs { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+.admin-tabs::-webkit-scrollbar { display: none; }
+.admin-tab { white-space: nowrap; flex: none; }
+.admin-tab:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+@media (max-width: 720px) {
+  .admin-topbar .brand-name { display: none; }
+  .admin-topbar .brand { gap: 6px; }
+  .admin-topbar .topbar-actions { gap: 14px; }
+  .admin-tabs { margin: 0 -16px 4px; padding: 0 16px; }
+}

@@ -187,9 +187,9 @@ export default function Admin() {
   const current = tabs.some(([k]) => k === tab) ? tab : "jobs";
   return (
     <>
-      <header className="topbar">
+      <header className="topbar admin-topbar">
         <div className="topbar-inner">
-          <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" />Market Analysis Tool <span className="muted">· {ROLE_TEXT[user.role]}</span></div>
+          <div className="brand"><img className="brand-logo" src="/ministryhub-logo.png" alt="MinistryHub" /><span className="brand-name">Market Analysis Tool</span> <span className="muted">· {ROLE_TEXT[user.role]}</span></div>
           <div className="topbar-actions">
             <a href="/">Public tool</a>
             <span className="muted">{user.email}</span>
