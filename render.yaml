@@ -5,7 +5,12 @@ services:
     runtime: python
     plan: free
     buildCommand: cd client && npm ci && npm run build && cd ../server && pip install -r requirements.txt
-    startCommand: cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Migrations run before each start (safe to repeat; a failed one stops the deploy, the old one stays live).
+    # --up-to 7: 0001-0007 only add tables and columns (IF NOT EXISTS), so the live data is kept. 0008 drops
+    # canonical_role and old leftovers, so it waits: check Neon, then run `python -m app.cli migrate` by hand
+    # and raise this number when a new migration is added.
+    # --proxy-headers: Render's proxy passes the visitor's IP, which the sign-in lockout counts by.
+    startCommand: cd server && python -m app.cli migrate --up-to 7 && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
@@ -15,6 +20,6 @@ services:
       - key: DATABASE_URL
         sync: false   # your Neon connection string (the -pooler one)
       - key: AXIOM_TOKEN
-        sync: false   # Axiom ingest token: logs are also sent to Axiom (server/app/logs.py)
+        sync: false   # Axiom ingest token: logs are also sent to Axiom (server/app/core/logs.py)
       - key: AXIOM_DATASET
         value: analyzer

@@ -13,9 +13,21 @@ analyser/
 │       ├── api.js          calls to the API
 │       └── components/     FilterBar, StatTiles, Charts, JobsTable
 ├── server/
-│   ├── app/                FastAPI API: routes, queries, settings
-│   ├── pipeline/           loads the JSON feed into Postgres and enriches it
-│   ├── database/           schema.sql
+│   ├── app/                one folder per feature (below), plus core/ and shared/
+│   │   ├── main.py         the FastAPI app: middleware, routers, the built dashboard
+│   │   ├── cli.py          every command: python -m app.cli <command> --help
+│   │   ├── core/           settings, database pool, logging, migration runner
+│   │   ├── shared/         US states and regions, quantiles, email and URL helpers
+│   │   ├── auth/           sign-in, sessions, users and roles, create-admin
+│   │   ├── jobs/           admin views of the postings per source, role rules, delete
+│   │   ├── report/         the public report (/api/report)
+│   │   ├── leads/          the public sign-up (/api/leads)
+│   │   ├── extraction/     admin "add a job from any URL" with OpenAI, and saving it
+│   │   ├── ai_usage/       AI call costs and the costs page
+│   │   ├── job_pages/      reading job pages (pay, type, size, denomination) and check-jobs
+│   │   └── ingestion/      ingest-feed, import-bizdev, push-data, collector/ (collect-jobs)
+│   ├── migrations/         numbered SQL files: the database schema, applied by `migrate`
+│   ├── tests/              one folder per feature
 │   └── data/raw/           the source JSON feed
 ├── phase/                  one document per project phase, with status
 └── render.yaml             deploys the API and the dashboard on Render
@@ -32,37 +44,37 @@ You need Python 3.11+, Node 20+, and a Postgres database.
 
 ```bash
 cp .env.example .env                      # then set DATABASE_URL
-pip install -r requirements.txt
-psql "$DATABASE_URL" -f database/schema.sql
-python -m pipeline.ingest data/raw/church_jobs_feed_02.10.26.json
+pip install -r requirements-dev.txt       # requirements.txt + pytest and ruff
+python -m app.cli migrate                 # creates or updates every table
+python -m app.cli ingest-feed data/raw/church_jobs_feed_02.10.26.json
 ```
 
 **Optional: the BizDev Excel sources** (from `server/`; the spreadsheets live in the git-ignored `data/` folder because they hold contact details)
 
 ```bash
-python -m pipeline.import_bizdev churches "../data/API BizDev_ Churches.xlsx"
-python -m pipeline.import_bizdev nonprofits "../data/API BizDev_ Nonprofits (Actual).xlsx"
-python -m pipeline.fetch_jobs churches     # reads each job page for pay, job type, church size
-python -m pipeline.fetch_jobs nonprofits   # add --retry to re-try blocked/failed pages
+python -m app.cli import-bizdev churches "../data/API BizDev_ Churches.xlsx"
+python -m app.cli import-bizdev nonprofits "../data/API BizDev_ Nonprofits (Actual).xlsx"
+python -m app.cli check-jobs churches     # reads each job page for pay, job type, church size
+python -m app.cli check-jobs nonprofits   # add --retry to re-try blocked/failed pages
 ```
 
 **Collecting new church jobs automatically** (from `server/`). Finds new US church jobs on the sites that allow it and adds
 them to the BizDev churches tab as "Auto-collected". [COLLECTOR_HOW_IT_WORKS.md](COLLECTOR_HOW_IT_WORKS.md) explains how; [COLLECTOR_GAPS.md](COLLECTOR_GAPS.md) lists what it leaves out. Safe to run daily:
 
 ```bash
-python -m pipeline.collect_jobs --dry-run          # see what's new, save nothing
-python -m pipeline.collect_jobs                    # read and save every new job
-python -m pipeline.collect_jobs --source sbc --limit 50
+python -m app.cli collect-jobs --dry-run         # see what's new, save nothing
+python -m app.cli collect-jobs                   # read and save every new job
+python -m app.cli collect-jobs --source sbc --limit 50
 # every run logs to server/logs/ and ends with a PROBLEMS list (site changed / blocked / site down)
 ```
 
 **Tracking expired jobs** (from `server/`). Each check records whether a job's page is still open:
 
 ```bash
-python -m pipeline.fetch_jobs json                 # first check of the JSON feed's job URLs
-python -m pipeline.fetch_jobs churches --recheck   # re-check every job not yet expired; run weekly
-python -m pipeline.fetch_jobs nonprofits --recheck
-python -m pipeline.fetch_jobs json --recheck
+python -m app.cli check-jobs json                 # first check of the JSON feed's job URLs
+python -m app.cli check-jobs churches --recheck   # re-check every job not yet expired; run weekly
+python -m app.cli check-jobs nonprofits --recheck
+python -m app.cli check-jobs json --recheck
 ```
 
 A job's status is `ok` (open), `expired` (404 / "position filled" / Workday says it's closed), `unknown`
@@ -71,9 +83,15 @@ A job's status is `ok` (open), `expired` (404 / "position filled" / Workday says
 closed, so the job closed between the two. Feed results live in `posting_checks`; the BizDev tables carry
 the same columns. The dashboard's **More filters → Status** and the table's Status column show them.
 
-The dashboard shows each source on its own tab (`?source=json|churches|nonprofits`). The import creates
-`json_jobs` (a view of the feed), `church_jobs` and `nonprofit_jobs`. Contact names and emails stay in
-the database; the API never returns them.
+The dashboard shows each source on its own tab (`?source=json|churches|nonprofits`): the feed tables,
+`church_jobs` and `nonprofit_jobs`. Contact names and emails stay in the database; the API never returns them.
+
+**Database changes** go in a new numbered file in `server/migrations/` (`0009_what_it_does.sql`), never by editing
+one that has run: `migrate` refuses a file whose text changed after it was applied. Each file runs in its own
+transaction. `python -m app.cli migrate --dry-run` lists what would run. Render runs `migrate` before every start.
+
+**Tests and lint** (from `server/`): `pytest`, `ruff check .`, `ruff format .`. Tests use `DATABASE_URL`; set
+`TEST_DATABASE_URL` to run them against a separate database instead (it is migrated first).
 
 **2. API** (from `server/`)
 
@@ -91,12 +109,12 @@ npm run dev                               # http://localhost:5173
 
 ## Logs
 
-Everything logs to files in `server/logs/` (git-ignored), and to the screen. Set up in [server/app/logs.py](server/app/logs.py).
+Everything logs to files in `server/logs/` (git-ignored), and to the screen. Set up in [server/app/core/logs.py](server/app/core/logs.py).
 
 | Log file | What's in it |
 |---|---|
 | `api.log` (new file each midnight, 30 days kept) | Every request: method, path, status, time, IP. Every error with its traceback. Admin actions: sign-ins and failed sign-ins, URLs extracted and what was found, AI calls and their cost, church size lookups, jobs saved and by whom |
-| `<script>-<date>-<time>.log`, one per run | Every pipeline script (`collect_jobs`, `fetch_jobs`, `ingest`, `import_bizdev`, `push_data`, `create_admin`): settings, every page fetched (status, size, time), every row's outcome, the summary, and a crash's traceback |
+| `<script>-<date>-<time>.log`, one per run | Every command (`collect_jobs`, `check_jobs`, `ingest`, `import_bizdev`, `push_data`, `create_admin`, `migrate`): settings, every page fetched (status, size, time), every row's outcome, the summary, and a crash's traceback |
 
 The screen shows the main lines; the files hold every detail. Passwords, session tokens, the database password and
 the spreadsheets' contact names and emails are never logged. On Render the disk is wiped on each deploy, so `api.log`
@@ -121,7 +139,7 @@ Admin accounts live in the database (`admin_users`, scrypt-hashed passwords); se
 or reset a password, from `server/` (set `DATABASE_URL` to the Neon URL to do it in production):
 
 ```bash
-python -m pipeline.create_admin admin@example.com   # asks for the password
+python -m app.cli create-admin admin@example.com   # asks for the password
 ```
 
 Set in `server/.env` locally and in Render's environment settings in production:
@@ -140,7 +158,7 @@ app and its API share one address. The data lives on Neon.
 |---|---|
 | Root Directory | *(empty: the repo root)* |
 | Build Command | `cd client && npm ci && npm run build && cd ../server && pip install -r requirements.txt` |
-| Start Command | `cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Start Command | `cd server && python -m app.cli migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'` |
 | Health Check Path | `/api/health` |
 | Environment | `DATABASE_URL` = the Neon pooled (`-pooler`) connection string; `PYTHON_VERSION` = `3.12.8`; `NODE_VERSION` = `20` |
 

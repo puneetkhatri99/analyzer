@@ -1,0 +1,32 @@
+import re
+
+# A job's role, from keywords in its title. Order matters: the first matching pattern wins.
+ROLE_RULES = [
+    (r"senior pastor|lead pastor|head pastor|solo pastor", "Senior/Lead Pastor"),
+    (r"executive pastor", "Executive Pastor"),
+    (r"associate pastor", "Associate Pastor"),
+    (r"worship|music director|choir|organist", "Worship/Music"),
+    (r"youth|student ministr|college ministr", "Youth/Student Ministry"),
+    (r"children|kids ministr|preschool", "Children's Ministry"),
+    (r"missions?|missionary", "Missions"),
+    (r"discipleship|teaching pastor|christian education", "Discipleship/Teaching"),
+    (r"chaplain", "Chaplain"),
+    (r"communicat|media|marketing|social media|graphic", "Communications/Media"),
+    (r"facilit|maintenance|custodia|janitor|groundskeep", "Facilities"),
+    (r"finance|accounting|bookkeep|payroll", "Finance"),
+    (r"administ|operations|office manager|executive assistant", "Administrative/Operations"),
+    # \b: "rector" must not match inside "Director"
+    (r"pastor|minister|clergy|priest|\brector\b|rabbi|\bimam\b", "Pastor/Minister (other)"),
+    (r"director|coordinator|manager", "Director/Coordinator"),
+    (r"teacher|professor|instructor|faculty", "Teacher/Faculty"),
+    (r"nurse|clinical|health|therapist", "Healthcare"),
+]
+_COMPILED_RULES = [(re.compile(pattern), label) for pattern, label in ROLE_RULES]
+
+
+def bucket_role(title: str | None) -> str:
+    t = (title or "").lower()
+    for pattern, label in _COMPILED_RULES:
+        if pattern.search(t):
+            return label
+    return "Other"

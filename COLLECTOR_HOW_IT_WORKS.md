@@ -1,6 +1,6 @@
 # Church job collector: how it works
 
-`server/pipeline/collect_jobs.py` finds new **US church jobs** on job sites that allow it and saves them to the
+`server/app/ingestion/collector/` finds new **US church jobs** on job sites that allow it and saves them to the
 **BizDev churches** tab, marked **Auto-collected**. What it leaves out and where it can fail: [COLLECTOR_GAPS.md](COLLECTOR_GAPS.md).
 
 ## Running it
@@ -8,10 +8,10 @@
 From `server/`:
 
 ```bash
-python -m pipeline.collect_jobs --dry-run              # list new jobs only; reads no job pages, saves nothing
-python -m pipeline.collect_jobs                        # every source: read and save every new job
-python -m pipeline.collect_jobs --source sbc --source efca --limit 50
-python -m pipeline.collect_jobs --days 365             # job boards: look back a year instead of 45 days (first backfill)
+python -m app.cli collect-jobs --dry-run              # list new jobs only; reads no job pages, saves nothing
+python -m app.cli collect-jobs                        # every source: read and save every new job
+python -m app.cli collect-jobs --source sbc --source efca --limit 50
+python -m app.cli collect-jobs --days 365             # job boards: look back a year instead of 45 days (first backfill)
 ```
 
 It's safe to run daily: jobs already saved are skipped. A dry run on 12 Nov 2026 found about **1,370 new jobs**.
@@ -51,7 +51,7 @@ to spot sudden drops.
    query string or a trailing slash).
 2. **List jobs from each source** (table below).
 3. **Keep only:** jobs in the US, jobs not already known, and (for job boards) jobs posted or updated in the last 45 days.
-4. **Read each new job's page** with the pipeline's existing reader (`fetch_jobs.fetch_one`). It uses the page's structured
+4. **Read each new job's page** with the shared page reader (`app/job_pages/fetcher.py`, `fetch_one`). It uses the page's structured
    job data first, then the visible text, to get pay, job type, remote, denomination and church size. It also tells whether
    the job is open, expired, blocked or unreadable.
 5. **Save** the open ones (see "How a job is saved").
@@ -117,4 +117,4 @@ admin-added jobs are never overwritten.
 **On the dashboard** the jobs appear on the **BizDev churches** tab. "Added via" shows **Auto-collected**, and you can filter
 by it under **More filters → Added via**. The role (Pastor, Worship/Music…) and the yearly pay are worked out from the title and
 salary when the page loads, like every other job. To mark auto-collected jobs that close, run the existing re-check:
-`python -m pipeline.fetch_jobs churches --recheck`.
+`python -m app.cli check-jobs churches --recheck`.

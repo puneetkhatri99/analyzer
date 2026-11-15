@@ -1,38 +1,44 @@
+"""The API, and the built dashboard (client/dist) served from the same address."""
+
 import logging
-import re
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from pydantic import BaseModel, Field
+from app.ai_usage.router import router as ai_usage_router
+from app.auth.router import router as auth_router
+from app.core.config import get_settings
+from app.core.db import close_pool, open_pool
+from app.core.logs import api_log
+from app.extraction.router import router as extraction_router
+from app.jobs.router import router as jobs_router
+from app.leads.router import router as leads_router
+from app.report.router import router as report_router
 
-from app import admin, jobs, report
-from app.config import ALLOWED_ORIGIN
-from app.db import get_conn
-from app.logs import api_log
+CLIENT_DIST = Path(__file__).resolve().parents[2] / "client" / "dist"
+CLIENT_PAGES = ("/admin", "/report")  # client-side routes: serve the app's page for them
 
 log = logging.getLogger("api")
 
 
 @asynccontextmanager
-async def lifespan(_):
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     api_log()  # on server start, not on import, so the tests don't write into the real log files
+    open_pool()
     log.info("API started")
     yield
+    close_pool()
     log.info("API stopped")
 
 
-app = FastAPI(title="MinistryHub Market Analysis Tool API", lifespan=lifespan)
-
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def log_requests(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
     """One line per request (method, path and query, status, time, visitor IP); a crash is logged with its traceback.
     Bodies and cookies are never logged, so passwords and session tokens stay out of the log."""
     start = time.perf_counter()
@@ -43,136 +49,50 @@ async def log_requests(request: Request, call_next):
         response = await call_next(request)
     except Exception:
         ms = round((time.perf_counter() - start) * 1000)
-        log.exception("%s %s -> crashed after %d ms (%s)", request.method, path, ms, ip, extra={**fields, "status": 500, "ms": ms})
+        log.exception(
+            "%s %s -> crashed after %d ms (%s)", request.method, path, ms, ip, extra={**fields, "status": 500, "ms": ms}
+        )
         raise
     ms = round((time.perf_counter() - start) * 1000)
     level = logging.WARNING if response.status_code >= 400 else logging.INFO
     # extra= fields become their own columns in Axiom, so requests can be charted by path, status and time
-    log.log(level, "%s %s -> %s in %d ms (%s)", request.method, path, response.status_code, ms, ip,
-            extra={**fields, "status": response.status_code, "ms": ms})
+    log.log(
+        level,
+        "%s %s -> %s in %d ms (%s)",
+        request.method,
+        path,
+        response.status_code,
+        ms,
+        ip,
+        extra={**fields, "status": response.status_code, "ms": ms},
+    )
     return response
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[ALLOWED_ORIGIN],
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-)
 
-
-def job_filters(
-    role: Optional[str] = None,
-    denomination: Optional[str] = None,
-    region: Optional[str] = None,
-    country: Optional[str] = None,
-    hours: Optional[str] = None,
-    status: Optional[Literal["open", "expired", "unverified"]] = None,
-    origin: Optional[Literal["feed", "excel", "admin", "collector"]] = None,
-    remote: Optional[str] = None,
-    search: Optional[str] = None,
-    has_pay: bool = False,
-    min_salary: float = 0,
-    min_church_size: float = 0,
-) -> dict:
-    return {
-        "role": role, "denomination": denomination, "region": region, "country": country,
-        "hours": hours, "status": status, "origin": origin, "remote": remote, "search": search, "has_pay": has_pay,
-        "min_salary": min_salary, "min_church_size": min_church_size,
-    }
-
-
-@app.get("/api/health")
-def health():
-    return {"ok": True}
-
-
-# json = the church jobs JSON feed; churches / nonprofits = the BizDev Excel imports.
-Source = Literal["json", "churches", "nonprofits"]
-
-
-# ---------- public: the report (summary figures only; brief P5-P7) ----------
-
-@app.get("/api/report/options")
-def report_options():
-    return report.report_options()
-
-
-@app.get("/api/report")
-def get_report(
-    role: list[str] = Query(default=[]),
-    state: list[str] = Query(default=[]),
-    size: list[str] = Query(default=[]),
-    denomination: list[str] = Query(default=[]),
-    type: Literal["full-time", "part-time"] = "full-time",
-):
-    return report.build_report({"role": role, "state": state, "size": size, "denomination": denomination, "type": type})
-
-
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-
-class Lead(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    email: str = Field(max_length=320)
-    organization: str = Field(min_length=1, max_length=300)
-    role: Optional[str] = Field(default=None, max_length=200)
-    location: Optional[str] = Field(default=None, max_length=200)
-    attendance: Optional[str] = Field(default=None, max_length=100)
-
-
-@app.post("/api/leads")
-def save_lead(lead: Lead):
-    """Sign-up before the report (brief P2). A returning email updates the row instead of adding one."""
-    email = lead.email.strip().lower()
-    if not EMAIL_RE.match(email):
-        raise HTTPException(422, "Please enter a valid email address.")
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT INTO public.leads (email, name, organization, role, location, attendance)
-               VALUES (%s, %s, %s, %s, %s, %s)
-               ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, organization = EXCLUDED.organization,
-                 role = EXCLUDED.role, location = EXCLUDED.location, attendance = EXCLUDED.attendance,
-                 last_seen_at = now()""",
-            (email, lead.name.strip(), lead.organization.strip(), lead.role, lead.location, lead.attendance),
-        )
-    return {"ok": True}
-
-
-# ---------- admin only: per-source view, postings and links (brief A1, A2) ----------
-
-@app.get("/api/sources", dependencies=[Depends(admin.require_viewer)])
-def sources():
-    return jobs.source_counts()
-
-
-@app.get("/api/filter-options", dependencies=[Depends(admin.require_viewer)])
-def filter_options(source: Source = "json"):
-    return jobs.build_filter_options(jobs.load_jobs(source))
-
-
-@app.get("/api/jobs", dependencies=[Depends(admin.require_viewer)])
-def list_jobs(source: Source = "json", filters: dict = Depends(job_filters)):
-    rows = jobs.apply_filters(jobs.load_jobs(source), filters)
-    return {"total": len(rows), "rows": rows}
-
-
-@app.get("/api/summary", dependencies=[Depends(admin.require_viewer)])
-def summary(source: Source = "json", filters: dict = Depends(job_filters)):
-    all_jobs = jobs.load_jobs(source)
-    return jobs.build_summary(
-        jobs.apply_filters(all_jobs, filters),
-        jobs.apply_filters(all_jobs, filters, skip=("role",)),
-        jobs.apply_filters(all_jobs, filters, skip=("region",)),
+def create_app() -> FastAPI:
+    app = FastAPI(title="MinistryHub Market Analysis Tool API", lifespan=lifespan)
+    app.middleware("http")(log_requests)
+    app.add_middleware(GZipMiddleware, minimum_size=1000)  # /api/jobs replies run to megabytes
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[get_settings().allowed_origin],
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
     )
 
+    @app.get("/api/health", tags=["health"])
+    def health() -> dict[str, bool]:
+        return {"ok": True}
 
-# The built dashboard (client/dist), served from the same address as the API.
-# Mounted last so /api/* routes win. Skipped when the client hasn't been built (local dev uses Vite).
-app.include_router(admin.router)
+    for router in (report_router, leads_router, jobs_router, auth_router, extraction_router, ai_usage_router):
+        app.include_router(router)
 
-CLIENT_DIST = Path(__file__).resolve().parents[2] / "client" / "dist"
-if CLIENT_DIST.is_dir():
-    # The admin and report pages are client-side routes; serve the app's page for them.
-    for page in ("/admin", "/report"):
-        app.get(page, include_in_schema=False)(lambda: FileResponse(CLIENT_DIST / "index.html"))
-    app.mount("/", StaticFiles(directory=CLIENT_DIST, html=True), name="client")
+    # Mounted last so /api/* routes win. Skipped when the client hasn't been built (local dev uses Vite).
+    if CLIENT_DIST.is_dir():
+        for page in CLIENT_PAGES:
+            app.get(page, include_in_schema=False)(lambda: FileResponse(CLIENT_DIST / "index.html"))
+        app.mount("/", StaticFiles(directory=CLIENT_DIST, html=True), name="client")
+    return app
+
+
+app = create_app()

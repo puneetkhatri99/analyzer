@@ -58,4 +58,4 @@ How the collector works: [COLLECTOR_HOW_IT_WORKS.md](COLLECTOR_HOW_IT_WORKS.md).
 | First run takes a while | About 1,400 pages: roughly 15–20 minutes (MinistryList's 10 s gap is the slowest) | Use `--limit` or `--source` to split it |
 
 **Not yet tested:** saving to the database. Reading was tested on every source, and the code's unit tests pass. Start
-with a small run, e.g. `python -m pipeline.collect_jobs --source efca --limit 5`, and check those jobs on the dashboard.
+with a small run, e.g. `python -m app.cli collect-jobs --source efca --limit 5`, and check those jobs on the dashboard.

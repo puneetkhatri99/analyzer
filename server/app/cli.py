@@ -1,0 +1,25 @@
+"""Command line for everything that isn't the API: python -m app.cli <command> --help"""
+
+import argparse
+import sys
+
+from app.auth import commands as auth_commands
+from app.core import migrations
+from app.ingestion import bizdev, feed, push_data
+from app.ingestion.collector import run as collector
+from app.job_pages import check
+
+COMMANDS = (migrations, auth_commands, feed, bizdev, check, collector, push_data)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m app.cli")
+    commands = parser.add_subparsers(dest="command", required=True)
+    for module in COMMANDS:
+        module.register(commands)
+    args = parser.parse_args(argv)
+    return args.handler(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
