@@ -17,6 +17,8 @@ services:
         value: 3.12.8
       - key: NODE_VERSION
         value: "20"
+      - key: APP_ENV
+        value: production   # with AXIOM_TOKEN set, logs go to Axiom only (Render's disk is wiped on each deploy)
       - key: DATABASE_URL
         sync: false   # your Neon connection string (the -pooler one)
       - key: AXIOM_TOKEN

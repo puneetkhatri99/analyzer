@@ -28,12 +28,14 @@ function AlertDialogPortal({
   )
 }
 
-function AlertDialogOverlay({
+// forwardRef: on React 18 the Radix portal passes its child a ref
+const AlertDialogOverlay = React.forwardRef(function AlertDialogOverlay({
   className,
   ...props
-}) {
+}, ref) {
   return (
     <AlertDialogPrimitive.Overlay
+      ref={ref}
       data-slot="alert-dialog-overlay"
       className={cn(
         "fixed inset-0 z-50 bg-black/50 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
@@ -42,7 +44,7 @@ function AlertDialogOverlay({
       {...props}
     />
   )
-}
+})
 
 function AlertDialogContent({
   className,

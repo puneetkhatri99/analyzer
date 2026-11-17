@@ -5,6 +5,8 @@ Nothing here returns counts, employer names, sources or links: the public must n
 """
 
 from collections.abc import Callable, Iterable
+from datetime import date
+from statistics import median
 from typing import Any
 
 from app.jobs.repository import HOURS_PER_YEAR, load_jobs
@@ -16,6 +18,9 @@ Job = dict[str, Any]
 
 MIN_PAID = 5  # below this many jobs with pay, a figure isn't shown and the search widens
 CONFIDENCE = [(30, "Strong"), (10, "Moderate"), (MIN_PAID, "Limited")]  # proposal; tune once the data grows
+MIN_SAMPLE = 30  # churches or closed jobs needed before a landing figure is shown
+CLOSE_WINDOW = 14  # a closing date counts only when known to within this many days
+RECENT_DAYS = 90  # a job never checked counts as active only if first seen this recently
 HIDDEN_ROLES = {"Healthcare"}  # the brief removes medical jobs from the public tool
 
 SIZES = [
@@ -50,6 +55,7 @@ def blended_jobs() -> list[Job]:
             if d["country"] not in ("US", "United States") or d["role"] in HIDDEN_ROLES:
                 continue
             d["state"] = state_name(d["region"])
+            d["source"] = source
             out.append(d)
     return out
 
@@ -74,8 +80,9 @@ def _stats(jobs: list[Job], job_type: str) -> dict[str, Any] | None:
     pay = sorted(p for p in (_pay(d, job_type) for d in jobs) if p is not None)
     if len(pay) < MIN_PAID:
         return None
-    digits = 2 if job_type == "part-time" else 0  # hourly rates keep cents
-    q: Callable[[float], float] = lambda x: round(quantile(pay, x), digits)  # noqa: E731
+    # Rounded so a figure drawn from a handful of postings doesn't look exact: $500 a year, 50 cents an hour.
+    step = 0.5 if job_type == "part-time" else 500
+    q: Callable[[float], float] = lambda x: round(quantile(pay, x) / step) * step  # noqa: E731
     return {
         "typical": q(0.5),
         "low": q(0.25),
@@ -108,6 +115,50 @@ def openings_label(n: int) -> str:
     """'4,000+': a rounded figure for the 'drawn from …' line (brief P7: no exact counts)."""
     step = 1000 if n >= 1000 else 100
     return f"{n // step * step:,}+" if n >= step else "hundreds of"
+
+
+def _day(v: str | None) -> date | None:
+    return date.fromisoformat(v[:10]) if v else None
+
+
+def active_openings(jobs: list[Job], today: date | None = None) -> int:
+    """Jobs still open: not expired, and either confirmed live by a page check or first seen within RECENT_DAYS.
+    A repost (same employer, title and state) counts once.
+    shortcut: reposts matched on exact text only; switch to the openings table once reposts are linked (brief D3)."""
+    today = today or date.today()
+    seen = set()
+    for d in jobs:
+        status, start = d.get("status"), _day(d.get("first_indexed"))
+        if status == "expired" or (status != "open" and not (start and (today - start).days <= RECENT_DAYS)):
+            continue
+        employer = (d.get("company_name") or "").strip().lower()
+        title = (d.get("job_name") or "").strip().lower()
+        seen.add((employer, title, d["state"]) if employer and title else id(d))  # no employer: can't spot a repost
+    return len(seen)
+
+
+def typical_attendance(jobs: list[Job]) -> int | None:
+    """Median stated attendance, one value per church (a church with many openings counts once), nonprofits left
+    out. Sizes are the bottom of a band ("501 to 750" is 501), so the figure is rounded down to 50 ("500+")."""
+    by_church = {}
+    for d in jobs:
+        if d["church_size"] and d.get("source") != "nonprofits" and d.get("company_name"):
+            by_church.setdefault(d["company_name"].strip().lower(), d["church_size"])
+    if len(by_church) < MIN_SAMPLE:
+        return None
+    return int(median(by_church.values())) // 50 * 50
+
+
+def typical_days_open(jobs: list[Job]) -> int | None:
+    """Median days from first seen to closing, using only closures pinned down to CLOSE_WINDOW days (a recheck saw
+    the job open, the next one saw it closed). None until MIN_SAMPLE such closures exist.
+    shortcut: reposts are not linked yet (brief D3), so a job some sites close at 30 days and repost counts short."""
+    days = []
+    for d in jobs:
+        start, live, gone = _day(d.get("first_indexed")), _day(d.get("last_live_at")), _day(d.get("expired_at"))
+        if start and live and gone and 0 <= (gone - live).days <= CLOSE_WINDOW and live >= start:
+            days.append((live - start).days + (gone - live).days / 2)
+    return round(median(days)) if len(days) >= MIN_SAMPLE else None
 
 
 def _as_of(jobs: list[Job]) -> str | None:
@@ -188,13 +239,12 @@ def build_report(filters: dict[str, Any], jobs: list[Job] | None = None) -> dict
         "pay": pay,
         "vs_national": vs_national,
         "share_percent": share,
-        "days_open": None,  # needs first/last-seen history (data work)
-        "insight": None,  # written by the MinistryHub team (data work)
+        "days_open": typical_days_open(base),
         "by_role": _rows(in_area(("role",)), "role", job_type, order=ROLE_ORDER),
         "by_size": by_size,
         "by_state": _rows([d for d in jobs if _matches(d, f, skip=("state",))], "state", job_type, limit=8),
         "by_denomination": _rows(in_area(("denomination",)), "denomination", job_type, limit=6),
-        "openings_label": openings_label(len(jobs)),
+        "openings_label": openings_label(active_openings(jobs)),
         "as_of": _as_of(jobs),
     }
 
@@ -218,9 +268,9 @@ def report_options(jobs: list[Job] | None = None) -> dict[str, Any]:
             "typical": national and national["typical"],
             "low": national and national["low"],
             "high": national and national["high"],
-            "avg_attendance": None,  # church size is known for too few jobs yet (data work)
-            "days_open": None,
-            "openings_label": openings_label(len(jobs)),
+            "attendance": typical_attendance(jobs),
+            "days_open": typical_days_open(jobs),
+            "openings_label": openings_label(active_openings(jobs)),
             "as_of": _as_of(jobs),
         },
     }

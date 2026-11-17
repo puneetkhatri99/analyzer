@@ -19,6 +19,21 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.4-mini"
 
+    # "production" on Render (render.yaml). With an Axiom token there, logs go to Axiom only, not to files.
+    app_env: str = "local"
+
+    # The daily lead report (app/leads/daily_report.py), sent through Resend. ALERT_FROM_EMAIL must be on a domain
+    # verified in Resend, e.g. "MinistryHub Leads <alerts@ministryhub.org>". SITE_URL links the email to the admin.
+    resend_api_key: str | None = None
+    alert_from_email: str | None = None
+    site_url: str = "http://localhost:5173"
+
+    # Sign-ups from these email domains (the team testing the site) aren't stored as leads. Comma-separated.
+    ignored_lead_domains: str = "ministryhub.org"
+
+    # Overrides the default log level (API: INFO, scripts: DEBUG), e.g. LOG_LEVEL=DEBUG to look into a problem.
+    log_level: str | None = None
+
     # Logs also go to Axiom when a token is set (app/core/logs.py).
     axiom_token: str | None = None
     axiom_dataset: str = "analyzer"

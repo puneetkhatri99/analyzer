@@ -1,37 +1,47 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
-import BarList from "./BarList.jsx";
+import BarList, { withPay } from "./BarList.jsx";
 
-function BreakdownCard({ title, rows, selected, unit, empty, children }) {
+const MIN_STATES = 3; // one or two states make a comparison that says nothing
+
+function BreakdownCard({ title, rows, selected, unit, children }) {
   return (
     <Card as="section" className="mh-card">
       <h2>{title}</h2>
-      {rows.length ? <BarList rows={rows} selected={selected} unit={unit} /> : <p className="mh-muted">{empty}</p>}
+      <BarList rows={rows} selected={selected} unit={unit} />
       {children}
     </Card>
   );
 }
 
-// Typical pay compared across roles, church sizes, states and denominations.
+// " in Ohio", " in the Midwest"; nothing when the figures are national.
+export const areaPhrase = (r) => (r.scope === "region" ? ` in the ${r.area_name}` : r.scope === "state" ? ` in ${r.area_name}` : "");
+
+// Typical pay compared across roles, church sizes, states and denominations. Sections without enough pay are left out.
 export default function Breakdowns({ r }) {
   const f = r.filters;
-  const where = r.scope !== "national" ? ` in ${r.area_name}` : "";
+  const sizes = withPay(r.by_size);
+  const states = withPay(r.by_state).length >= MIN_STATES ? r.by_state : [];
+  const denoms = withPay(r.by_denomination);
+  const pair = [
+    states.length > 0 && <BreakdownCard key="state" title="Pay by state" rows={states} selected={f.state} unit={r.unit} />,
+    denoms.length > 0 && <BreakdownCard key="denom" title="By denomination" rows={denoms} selected={f.denomination} unit={r.unit} />,
+  ].filter(Boolean);
   return (
     <>
-      <div data-reveal>
-        <BreakdownCard title={`Compared with other roles${where}`} rows={r.by_role} selected={f.role} unit={r.unit}
-          empty="Not enough listed pay to compare roles yet." />
-      </div>
-      <div data-reveal>
-        <BreakdownCard title="By weekly attendance" rows={r.by_size} selected={f.size} unit={r.unit} empty="">
-          {f.size.length > 0 && <p className="mh-small">Your selected sizes are highlighted.</p>}
-        </BreakdownCard>
-      </div>
-      <div className="mh-two" data-reveal>
-        <BreakdownCard title="Pay by state" rows={r.by_state} selected={f.state} unit={r.unit} empty="Not enough listed pay by state yet." />
-        <BreakdownCard title="By denomination" rows={r.by_denomination} selected={f.denomination} unit={r.unit}
-          empty="Not enough listed pay by denomination yet." />
-      </div>
+      {withPay(r.by_role).length > 0 && (
+        <div data-reveal>
+          <BreakdownCard title={`Compared with other roles${areaPhrase(r)}`} rows={r.by_role} selected={f.role} unit={r.unit} />
+        </div>
+      )}
+      {sizes.length > 0 && (
+        <div data-reveal>
+          <BreakdownCard title="By weekly attendance" rows={sizes} selected={f.size} unit={r.unit}>
+            {f.size.length > 0 && <p className="mh-small">Your selected sizes are highlighted.</p>}
+          </BreakdownCard>
+        </div>
+      )}
+      {pair.length > 0 && <div className={pair.length === 2 ? "mh-two" : undefined} data-reveal>{pair}</div>}
     </>
   );
 }

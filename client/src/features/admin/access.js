@@ -8,6 +8,8 @@ export const can = (user, role) => ROLES.indexOf(user.role) >= ROLES.indexOf(rol
 export const TABS = [
   ["jobs", "Jobs", "viewer"],
   ["add", "Add a job", "editor"],
+  ["leads", "Leads", "admin"],
   ["users", "Users", "admin"],
   ["costs", "AI costs", "admin"],
+  ["settings", "Settings", "admin"],
 ];

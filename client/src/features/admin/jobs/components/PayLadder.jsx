@@ -4,10 +4,10 @@ import { MIN_PAID, count, money, moneyShort } from "@/lib/format.js";
 // Capped so one thin, wide band can't squash every other row; bands past the cap are clipped.
 const SCALE_CAP = 160000;
 
-function scaleFor(rows, compact) {
+function scaleFor(rows) {
   const top = Math.min(SCALE_CAP, Math.max(40000, ...rows.map((r) => r.p75 || 0)));
   const max = Math.ceil(top / 40000) * 40000;
-  const step = compact ? max / 2 : max > 80000 ? 40000 : 20000;
+  const step = max / 2; // three labels: the axis column is too narrow for more without them running together
   const ticks = [];
   for (let v = 0; v <= max; v += step) ticks.push(v);
   return { max, ticks };
@@ -18,7 +18,7 @@ const pct = (v, max) => `${Math.min(100, (v / max) * 100)}%`;
 export default function PayLadder({ rows, nameHeader, selected, onSelect, compact = false }) {
   const benchmarked = rows.filter((r) => r.paid >= MIN_PAID);
   const thin = rows.filter((r) => r.paid < MIN_PAID);
-  const { max, ticks } = scaleFor(benchmarked, compact);
+  const { max, ticks } = scaleFor(benchmarked);
 
   const toggle = (name) => onSelect(selected === name ? "" : name);
 

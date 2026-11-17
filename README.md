@@ -117,8 +117,9 @@ Everything logs to files in `server/logs/` (git-ignored), and to the screen. Set
 | `<script>-<date>-<time>.log`, one per run | Every command (`collect_jobs`, `check_jobs`, `ingest`, `import_bizdev`, `push_data`, `create_admin`, `migrate`): settings, every page fetched (status, size, time), every row's outcome, the summary, and a crash's traceback |
 
 The screen shows the main lines; the files hold every detail. Passwords, session tokens, the database password and
-the spreadsheets' contact names and emails are never logged. On Render the disk is wiped on each deploy, so `api.log`
-only lasts until the next deploy there.
+the spreadsheets' contact names and emails are never logged. On Render the disk is wiped on each deploy, so with
+`APP_ENV=production` (set in `render.yaml`) and `AXIOM_TOKEN` both set, no log files are written there and Axiom holds
+everything. Without the token, production still writes the files.
 
 **Axiom.** When `AXIOM_TOKEN` is set (in `server/.env` locally, in Render's environment settings in production), every
 log line is also sent to the Axiom dataset `AXIOM_DATASET` (default `analyzer`) at [axiom.co](https://axiom.co), where it's
@@ -126,6 +127,11 @@ kept, searchable and chartable. A background thread sends batches every 2 second
 Axiom is unreachable the lines are skipped and the files still have them. Fields: `_time`, `level`, `logger`, `message`,
 `app` (`api` or the script), `run`, `env` (`local`/`render`), `exception`, and per request `method`, `path`, `status`,
 `ms`, `ip`. The collector also sends one `event = "source_summary"` row per source per run, and `event = "problem"` rows.
+
+Every API request gets an ID, returned in the `X-Request-ID` header and set as `request_id` on every line it logs:
+`['analyzer'] | where request_id == "<id>"` shows one request end to end. Successful health checks and static files
+aren't logged. `LOG_LEVEL` overrides the default level (API `INFO`, scripts `DEBUG`), for example `LOG_LEVEL=DEBUG`
+on Render to look into a problem without changing code.
 
 ## Admin panel
 

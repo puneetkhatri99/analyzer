@@ -2,9 +2,11 @@
 
 import logging
 import time
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,9 +18,10 @@ from app.ai_usage.router import router as ai_usage_router
 from app.auth.router import router as auth_router
 from app.core.config import get_settings
 from app.core.db import close_pool, open_pool
-from app.core.logs import api_log
+from app.core.logs import api_log, request_id
 from app.extraction.router import router as extraction_router
 from app.jobs.router import router as jobs_router
+from app.leads.router import admin_router as leads_admin_router
 from app.leads.router import router as leads_router
 from app.report.router import router as report_router
 
@@ -40,20 +43,46 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 async def log_requests(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
     """One line per request (method, path and query, status, time, visitor IP); a crash is logged with its traceback.
-    Bodies and cookies are never logged, so passwords and session tokens stay out of the log."""
+    Bodies and cookies are never logged, so passwords and session tokens stay out of the log.
+
+    Each request gets an ID: it's on every line the request logs (request_id in Axiom) and sent back in the
+    X-Request-ID header, so a user's error report can be matched to its log lines. Successful health checks and
+    static files (the built dashboard) aren't logged: they'd bury the API's own lines."""
+    rid = uuid.uuid4().hex[:16]
+    token = request_id.set(rid)
+    try:
+        return await _log_request(request, call_next, rid)
+    finally:
+        request_id.reset(token)
+
+
+def _fields(request: Request, ip: str) -> tuple[str, dict[str, Any]]:
+    """The path as its route pattern ("/api/admin/leads/{email}", not the address itself), so values in a path never
+    reach the log. Known after routing; a path no route matched (a 404) is logged as it came."""
+    route = getattr(request.scope.get("route"), "path", None) or request.url.path
+    query = request.url.query or None
+    fields = {"method": request.method, "path": route, "query": query, "ip": ip}
+    return route + (f"?{query}" if query else ""), fields
+
+
+async def _log_request(request: Request, call_next: Callable[[Request], Awaitable[Response]], rid: str) -> Response:
     start = time.perf_counter()
     ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "?").split(",")[0].strip()
-    path = request.url.path + (f"?{request.url.query}" if request.url.query else "")
-    fields = {"method": request.method, "path": request.url.path, "query": request.url.query or None, "ip": ip}
     try:
         response = await call_next(request)
     except Exception:
         ms = round((time.perf_counter() - start) * 1000)
+        path, fields = _fields(request, ip)
         log.exception(
             "%s %s -> crashed after %d ms (%s)", request.method, path, ms, ip, extra={**fields, "status": 500, "ms": ms}
         )
         raise
     ms = round((time.perf_counter() - start) * 1000)
+    path, fields = _fields(request, ip)
+    response.headers["X-Request-ID"] = rid
+    noise = request.url.path == "/api/health" or not request.url.path.startswith("/api")
+    if noise and response.status_code < 400:
+        return response
     level = logging.WARNING if response.status_code >= 400 else logging.INFO
     # extra= fields become their own columns in Axiom, so requests can be charted by path, status and time
     log.log(
@@ -84,7 +113,15 @@ def create_app() -> FastAPI:
     def health() -> dict[str, bool]:
         return {"ok": True}
 
-    for router in (report_router, leads_router, jobs_router, auth_router, extraction_router, ai_usage_router):
+    for router in (
+        report_router,
+        leads_router,
+        leads_admin_router,
+        jobs_router,
+        auth_router,
+        extraction_router,
+        ai_usage_router,
+    ):
         app.include_router(router)
 
     # Mounted last so /api/* routes win. Skipped when the client hasn't been built (local dev uses Vite).

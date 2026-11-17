@@ -37,17 +37,19 @@ const buttonVariants = cva(
   }
 )
 
-function Button({
+// forwardRef: on React 18 a Radix trigger (dropdown, popover) needs the button's ref to place its menu
+const Button = React.forwardRef(function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
   ...props
-}) {
+}, ref) {
   const Comp = asChild ? Slot.Root : "button"
 
   return (
     <Comp
+      ref={ref}
       data-slot="button"
       data-variant={variant}
       data-size={size}
@@ -55,6 +57,6 @@ function Button({
       {...props}
     />
   )
-}
+})
 
 export { Button, buttonVariants }

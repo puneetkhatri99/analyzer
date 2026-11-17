@@ -106,8 +106,8 @@
 
 /* landing: glance, features, call band */
 .mh-glance { background: var(--mh-cream); padding: 44px 0 52px; }
-.mh-glance-grid { display: grid; gap: 24px; margin-top: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (min-width: 900px) { .mh-glance-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* auto-fit: 2 to 4 figures, depending on which have enough data */
+.mh-glance-grid { display: grid; gap: 24px; margin-top: 20px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .mh-glance strong { display: block; font-size: var(--fs-h2); font-weight: 800; color: var(--mh-ink); line-height: 1.15; letter-spacing: -0.02em; }
 .mh-glance span { display: block; color: var(--mh-ink); font-size: var(--fs-body); margin-top: 6px; max-width: 260px; }
 .mh-section { padding-top: 64px; }
@@ -149,6 +149,10 @@
 .mh-refine-summary { flex-basis: 100%; font-size: var(--fs-small); color: var(--mh-muted); }
 .mh-refine-body { display: grid; gap: 22px; padding-top: 20px; }
 .mh-reset { justify-self: start; }
+.mh-refine-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mh-refine-actions .mh-btn { min-height: 44px; }
+.mh-pending { margin-top: -10px; font-size: var(--fs-small); }
+.mh-reset:disabled { opacity: .45; cursor: default; text-decoration: none; }
 .mh-filter { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; }
 .mh-filter h3, .mh-filter legend { font-size: var(--fs-small); font-weight: 700; color: var(--mh-ink); padding: 0; margin-bottom: 4px; }
 .mh-chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -207,19 +211,16 @@
 
 .mh-bars { display: grid; gap: 10px; }
 .mh-bar-row { display: grid; grid-template-columns: minmax(90px, 180px) 1fr auto; gap: 14px; align-items: center; font-size: var(--fs-small); }
-.mh-bar-name { overflow-wrap: anywhere; }
+.mh-bar-name { overflow-wrap: break-word; }
 .mh-bar-track { height: 20px; }
 .mh-bar { display: block; height: 100%; background: var(--mh-bar); border-radius: 6px; min-width: 4px; }
-.mh-bar.is-empty { background: var(--mh-empty); }
+@media (max-width: 479px) { .mh-wide-only { display: none; } }
+@media (min-width: 480px) { .mh-narrow-only { display: none; } }
 .mh-bar-value { font-weight: 700; color: var(--mh-ink); text-align: right; min-width: 72px; font-variant-numeric: tabular-nums; }
 .mh-bar-row.is-on .mh-bar-name { font-weight: 700; color: var(--mh-ink); }
 .mh-bar-row.is-on .mh-bar { background: var(--mh-teal); }
 @media (max-width: 520px) { .mh-bar-row { grid-template-columns: 1fr auto; } .mh-bar-track { grid-column: 1 / -1; grid-row: 2; height: 12px; } }
 
-.mh-insight { background: var(--mh-cream); border-radius: 22px; padding: 26px; display: flex; gap: 22px; align-items: flex-start; }
-.mh-insight h2 { font-size: var(--fs-h3); font-weight: 800; margin-bottom: 8px; }
-.mh-insight p { color: var(--mh-ink); }
-.mh-bulb { width: 52px; height: 52px; border-radius: 50%; background: var(--mh-yellow); display: grid; place-items: center; flex: none; color: var(--mh-ink); }
 .mh-report-main .mh-band { margin-top: 8px; }
 
 /* motion (src/lib/motion.js adds .mh-motion unless reduced motion is asked for) */
@@ -250,7 +251,7 @@
   .mh-print .mh-pay { padding: 20px 24px; gap: 14px; break-inside: avoid; }
   .mh-print .mh-pay-big { font-size: 44px; }
   .mh-print .mh-pay-foot, .mh-print .mh-confidence { display: none; }
-  .mh-print .mh-stats { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .mh-print .mh-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
   .mh-print .mh-stat { padding: 14px !important; }
   .mh-print .mh-stat strong { font-size: 22px; }
   .mh-print .mh-stat p, .mh-print .mh-stat h3 { font-size: 11px; }
@@ -260,8 +261,6 @@
   .mh-print .mh-bar-row { grid-template-columns: 90px 1fr auto; gap: 8px; font-size: 11px; }
   .mh-print .mh-bar-track { grid-column: auto; grid-row: auto; height: 12px; }
   .mh-print .mh-bar-value { min-width: 0; }
-  .mh-print .mh-insight { padding: 16px 20px; break-inside: avoid; }
-  .mh-print .mh-insight h2 { font-size: 15px; }
   .mh-print-note { font-size: 10.5px; color: var(--mh-muted); }
   .mh-print-foot { background: #000; color: #fff; display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-radius: 12px; margin-top: 4px; text-align: right; font-size: 12px; }
   .mh-print-foot .mh-logo { height: 20px; }

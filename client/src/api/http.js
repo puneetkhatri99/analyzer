@@ -10,9 +10,10 @@ export function toQuery(params) {
   return q.toString();
 }
 
-async function request(path, { method = "GET", body } = {}) {
+async function request(path, { method = "GET", body, keepalive } = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
+    keepalive,
     headers: body === undefined ? undefined : { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -29,3 +30,5 @@ export const getJSON = (path) => request(path);
 export const postJSON = (path, body = {}) => request(path, { method: "POST", body });
 export const patchJSON = (path, body) => request(path, { method: "PATCH", body });
 export const del = (path) => request(path, { method: "DELETE" });
+// Fire and forget, and still sent when the page is closing (a click on a link that leaves the site).
+export const beacon = (path, body) => request(path, { method: "POST", body, keepalive: true }).catch(() => {});

@@ -288,7 +288,7 @@ def _run(args: argparse.Namespace) -> int:
         since,
         f" | at most {args.limit} jobs read" if args.limit else "",
     )
-    log.info("Database: %s | log file: %s", urlsplit(get_settings().database_url or "").hostname, log_path)
+    log.info("Database: %s | log: %s", urlsplit(get_settings().database_url or "").hostname, log_path)
     log.info("=" * 78)
 
     problems: list[tuple[str, SiteProblem]] = []

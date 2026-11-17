@@ -27,3 +27,12 @@ export const removeUser = (email) => del(userPath(email));
 
 // AI costs
 export const fetchCosts = () => getJSON("/api/admin/costs");
+
+// leads (visitors who signed up for a report)
+export const fetchLeads = () => getJSON("/api/admin/leads");
+export const fetchLeadHistory = (email) => getJSON(`/api/admin/leads/${encodeURIComponent(email)}`);
+
+// settings (who gets the daily lead report)
+export const fetchSettings = () => getJSON("/api/admin/settings");
+export const saveSettings = (settings) => patchJSON("/api/admin/settings", settings);
+export const sendTestReport = () => postJSON("/api/admin/settings/test-email");

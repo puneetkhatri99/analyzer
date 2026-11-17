@@ -8,12 +8,13 @@ const NOTES = {
   nonprofits: "Excel leads · pay read from each job page",
 };
 
+// No tab panels: the tabs switch the data shown below, so each tab's aria-controls (pointing at a panel) is dropped.
 export default function SourceTabs({ sources, value, onChange }) {
   return (
     <Tabs value={value} onValueChange={onChange}>
       <TabsList aria-label="Data source" className="sources w-full bg-transparent p-0 group-data-[orientation=horizontal]/tabs:h-auto">
         {(sources || [{ key: value, label: "…" }]).map((s) => (
-          <TabsTrigger key={s.key} value={s.key} className="source h-auto whitespace-normal data-[state=active]:shadow-none">
+          <TabsTrigger key={s.key} value={s.key} aria-controls={undefined} className="source h-auto whitespace-normal data-[state=active]:shadow-none">
             <span className="source-label">{s.label}</span>
             {s.postings != null && (
               <span className="source-meta num">

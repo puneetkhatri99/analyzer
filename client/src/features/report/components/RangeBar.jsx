@@ -1,8 +1,8 @@
 import React from "react";
-import { rangeScale } from "../lib/pay.js";
+import { pay, rangeScale } from "../lib/pay.js";
 
 // Lower quarter to upper quarter as a band, typical pay as a tick, and an optional marker (the visitor's offer).
-export default function RangeBar({ p, marker }) {
+export default function RangeBar({ p, unit, marker }) {
   const at = rangeScale(p);
   return (
     <div className="mh-range">
@@ -12,8 +12,8 @@ export default function RangeBar({ p, marker }) {
         <div className="mh-range-tick" style={{ left: at(p.typical) }} />
         {marker != null && <div className="mh-range-marker" style={{ left: at(marker) }} title="Your offer" />}
       </div>
-      <span className="mh-range-q" style={{ left: at(p.low) }}>Lower quarter</span>
-      <span className="mh-range-q" style={{ left: at(p.high) }}>Upper quarter</span>
+      <span className="mh-range-q" style={{ left: at(p.low) }}>{pay(p.low, unit)}</span>
+      <span className="mh-range-q" style={{ left: at(p.high) }}>{pay(p.high, unit)}</span>
     </div>
   );
 }

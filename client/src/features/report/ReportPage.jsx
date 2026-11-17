@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
 import CallBand from "@/features/site/CallBand.jsx";
 import PublicLayout from "@/features/site/PublicLayout.jsx";
-import { savedLead } from "@/features/site/lead.js";
+import { savedLead, track } from "@/features/site/lead.js";
 import { HOW_URL } from "@/features/site/links.js";
 import { useReveal } from "@/lib/motion.js";
 import Breakdowns from "./components/Breakdowns.jsx";
-import InsightCard from "./components/InsightCard.jsx";
 import MarketStats from "./components/MarketStats.jsx";
 import OfferCheck from "./components/OfferCheck.jsx";
 import PayCard from "./components/PayCard.jsx";
@@ -22,11 +21,10 @@ function ReportBody({ r, roleText, typeLabel }) {
     <>
       {r.note && r.pay && <WidenedNote note={r.note} />}
       <PayCard r={r} typeLabel={typeLabel} />
-      <MarketStats r={r} roleText={roleText} />
       {r.pay && <OfferCheck key={`${r.unit}-${r.pay.typical}`} r={r} />}
+      <MarketStats r={r} roleText={roleText} />
       <Breakdowns r={r} />
-      <InsightCard insight={r.insight} roleText={roleText} />
-      <CallBand title={`Hiring for ${r.title.role}?`} secondary={<a className="mh-band-link" href={HOW_URL}>See how our searches work</a>}>
+      <CallBand title={`Hiring for ${r.title.role}?`} secondary={<a className="mh-band-link" href={HOW_URL} data-track>See how our searches work</a>}>
         Let's talk through your search in {r.title.area}. A responsive partner from first call to first day:
         we reply promptly, update you every two weeks, and never go quiet.
       </CallBand>
@@ -37,10 +35,19 @@ function ReportBody({ r, roleText, typeLabel }) {
 export default function ReportPage() {
   const [lead] = useState(savedLead);
   const { options } = useReportOptions();
-  const { filters, setFilters, report: r, error, updating } = useReport();
+  const { filters, draft, setDraft, apply, reset, pending, changed, report: r, error, updating } = useReport();
 
+  // Not signed up (e.g. opened a shared link): sign up first, then come back to this exact report.
   // shortcut: the sign-up gate is in the browser only; the report API returns summary figures, nothing private
-  useEffect(() => { if (!lead) window.location.replace("/"); }, [lead]);
+  useEffect(() => {
+    if (!lead) window.location.replace(`/?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+  }, [lead]);
+  useEffect(() => {
+    if (!r) return undefined;
+    const downloaded = () => track("download", { report: `${r.title.role} in ${r.title.area}` });
+    window.addEventListener("beforeprint", downloaded);
+    return () => window.removeEventListener("beforeprint", downloaded);
+  }, [r]);
   useReveal(r);
   if (!lead) return null;
 
@@ -51,7 +58,7 @@ export default function ReportPage() {
       <div className="mh-wrap mh-report">
         <ReportHeader r={r} />
         <div className="mh-report-grid">
-          {options ? <RefinePanel f={filters} opts={options} setF={setFilters} /> : <aside className="mh-refine" />}
+          {options ? <RefinePanel f={draft} opts={options} setF={setDraft} apply={apply} pending={pending} reset={reset} changed={changed} /> : <aside className="mh-refine" />}
           <div className={`mh-report-main${updating && r ? " is-updating" : ""}`} aria-live="polite" aria-busy={updating}>
             {error && <p className="mh-note" role="alert">We couldn't load the report ({error}). Please try again in a minute.</p>}
             {r && <ReportBody r={r} roleText={roleText} typeLabel={typeLabel} />}

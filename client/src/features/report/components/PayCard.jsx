@@ -14,11 +14,14 @@ export default function PayCard({ r, typeLabel }) {
       </section>
     );
   }
+  // the title names the visitor's states; say so when the figures come from a wider area
+  const widened = r.filters.state.length > 0 && r.scope !== "state";
+  const from = widened ? ` · ${r.scope === "national" ? "Nationwide" : r.area_name}` : "";
   return (
     <section className="mh-pay" data-reveal>
       <div className="mh-pay-top">
         <div>
-          <h2 className="mh-pay-label">Typical pay, {typeLabel}</h2>
+          <h2 className="mh-pay-label">Typical pay, {typeLabel}{from}</h2>
           <p className="mh-pay-big">{pay(p.typical, r.unit)}<span>{per(r.unit)}</span></p>
         </div>
         <div className="mh-pay-range">
@@ -26,7 +29,7 @@ export default function PayCard({ r, typeLabel }) {
           <strong>{pay(p.low, r.unit)} – {pay(p.high, r.unit)}</strong>
         </div>
       </div>
-      <RangeBar p={p} />
+      <RangeBar p={p} unit={r.unit} />
       <span className="mh-confidence"><i aria-hidden="true" />Confidence: {p.confidence}</span>
       <p className="mh-pay-foot">Drawn from {r.openings_label} active ministry job openings. Data as of {longDay(r.as_of)}.</p>
     </section>

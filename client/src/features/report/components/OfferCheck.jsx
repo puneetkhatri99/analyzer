@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { track } from "@/features/site/lead.js";
 import { offerVerdict, parseAmount, pay } from "../lib/pay.js";
 import RangeBar from "./RangeBar.jsx";
 
@@ -24,6 +25,8 @@ export default function OfferCheck({ r }) {
     }
     setProblem(null);
     setAmount(n);
+    // the amount tells the team the church's budget before a sales call (brief R5)
+    track("offer", { amount: n, unit: r.unit, verdict: offerVerdict(n, r.pay, r.unit)[0], report: `${r.title.role} in ${r.title.area}` });
     setText(pay(n, r.unit));
   };
 
@@ -44,7 +47,7 @@ export default function OfferCheck({ r }) {
       {problem && <p id="offer-problem" className="mh-error" role="alert">{problem}</p>}
       {verdict && (
         <>
-          <RangeBar p={r.pay} marker={amount} />
+          <RangeBar p={r.pay} unit={r.unit} marker={amount} />
           <p className="mh-offer-verdict" role="status"><strong>{verdict[0]}</strong> {verdict[1]}</p>
         </>
       )}

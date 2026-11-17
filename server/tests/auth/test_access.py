@@ -69,6 +69,9 @@ def _flow(sign_in):
         ("get", "/api/admin/users"),
         ("post", "/api/admin/users"),
         ("get", "/api/admin/costs"),
+        ("get", "/api/admin/leads"),
+        ("get", "/api/admin/settings"),
+        ("post", "/api/admin/settings/test-email"),
     ]:
         assert getattr(v, method)(path, **({"json": {}} if method == "post" else {})).status_code == 403, path
 
@@ -87,6 +90,7 @@ def _flow(sign_in):
         == 403
     )
     assert e.get("/api/admin/costs").status_code == 403
+    assert e.get("/api/admin/leads").status_code == 403
 
     # Admin resets a password: the user is signed out and must change it again; then promotes and removes users.
     assert a.patch(f"/api/admin/users/{VIEWER}", json={"password": "another-temp-1"}).status_code == 200

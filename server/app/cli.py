@@ -8,8 +8,9 @@ from app.core import migrations
 from app.ingestion import bizdev, feed, push_data
 from app.ingestion.collector import run as collector
 from app.job_pages import check
+from app.leads import daily_report
 
-COMMANDS = (migrations, auth_commands, feed, bizdev, check, collector, push_data)
+COMMANDS = (migrations, auth_commands, feed, bizdev, check, collector, push_data, daily_report)
 
 
 def main(argv: list[str] | None = None) -> int:

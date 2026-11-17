@@ -15,9 +15,9 @@ export default function JobsHeader({ source, sources, filters, stats: s, onExpor
         <p className="muted small">
           {current?.label || "…"} · {source === "json" ? "data as of" : "pages last read"} {s?.as_of ? longDate(s.as_of) : "…"}
         </p>
-        <p className="finding" aria-live="polite">
-          {s ? <Finding filters={filters} stats={s} /> : <Skeleton className="inline-block h-4 w-[min(520px,100%)]" />}
-        </p>
+        <div className="finding" aria-live="polite">
+          {s ? <Finding filters={filters} stats={s} /> : <Skeleton className="h-4 w-[min(520px,100%)]" />}
+        </div>
       </div>
       <Button onClick={onExport} disabled={!canExport || !s?.postings}>
         <Download aria-hidden="true" />

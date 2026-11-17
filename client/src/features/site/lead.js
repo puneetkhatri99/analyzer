@@ -1,3 +1,5 @@
+import { beacon } from "@/api/http.js";
+
 // The visitor's sign-up, kept in this browser so a returning visitor skips the form. Storage can be blocked.
 const LEAD_KEY = "mh_lead";
 
@@ -9,4 +11,11 @@ export function saveLead(lead) {
 }
 export function forgetLead() {
   try { localStorage.removeItem(LEAD_KEY); } catch { /* nothing stored */ }
+}
+
+// One step in the signed-up visitor's history (admin → Leads). Nothing is sent for a visitor who hasn't signed up.
+// type: report | offer | download | cta | click (server/app/leads/router.py EventType)
+export function track(type, details = {}) {
+  const lead = savedLead();
+  if (lead?.email) beacon("/api/leads/events", { email: lead.email, type, details });
 }

@@ -7,6 +7,8 @@ import LoginPage from "./auth/LoginPage.jsx";
 import { useSession } from "./auth/useSession.js";
 import CostsPage from "./costs/CostsPage.jsx";
 import JobsPage from "./jobs/JobsPage.jsx";
+import LeadsPage from "./leads/LeadsPage.jsx";
+import SettingsPage from "./settings/SettingsPage.jsx";
 import AdminHeader from "./layout/AdminHeader.jsx";
 import UsersPage from "./users/UsersPage.jsx";
 
@@ -40,13 +42,15 @@ export default function AdminApp() {
       ) : (
         <main className="canvas admin">
           <Tabs value={current} onValueChange={showSection} className="gap-3">
-            <TabsList variant="line" aria-label="Admin sections" className="admin-tabs">
+            <TabsList variant="line" aria-label="Admin sections" className="admin-tabs max-w-full justify-start overflow-x-auto">
               {tabs.map(([key, label]) => <TabsTrigger key={key} value={key} className="flex-none px-3">{label}</TabsTrigger>)}
             </TabsList>
             <TabsContent value="jobs" className={PANEL}><JobsPage canEdit={can(user, "editor")} /></TabsContent>
             <TabsContent value="add" className={PANEL}><AddJobPage /></TabsContent>
+            <TabsContent value="leads" className={PANEL}><LeadsPage /></TabsContent>
             <TabsContent value="users" className={PANEL}><UsersPage me={user.email} /></TabsContent>
             <TabsContent value="costs" className={PANEL}><CostsPage /></TabsContent>
+            <TabsContent value="settings" className={PANEL}><SettingsPage /></TabsContent>
             {current === PASSWORD && <div className="password-page"><ChangePasswordForm /></div>}
           </Tabs>
         </main>

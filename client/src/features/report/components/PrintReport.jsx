@@ -2,8 +2,7 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import { BOOK_URL } from "@/features/site/links.js";
 import { longDay } from "@/lib/format.js";
-import BarList from "./BarList.jsx";
-import InsightCard from "./InsightCard.jsx";
+import BarList, { withPay } from "./BarList.jsx";
 import MarketStats from "./MarketStats.jsx";
 import PayCard from "./PayCard.jsx";
 
@@ -21,9 +20,8 @@ export default function PrintReport({ r, lead, roleText, typeLabel }) {
       <MarketStats r={r} roleText={roleText} compact />
       <div className="mh-print-cols">
         <Card className="mh-card"><h2>Compared with other roles</h2><BarList rows={r.by_role} selected={r.filters.role} unit={r.unit} /></Card>
-        <Card className="mh-card"><h2>By weekly attendance</h2><BarList rows={r.by_size} selected={r.filters.size} unit={r.unit} /></Card>
+        {withPay(r.by_size).length > 0 && <Card className="mh-card"><h2>By weekly attendance</h2><BarList rows={r.by_size} selected={r.filters.size} unit={r.unit} /></Card>}
       </div>
-      <InsightCard insight={r.insight} roleText={roleText} icon={false} />
       <p className="mh-print-note">
         {r.note ? `${r.note} ` : ""}Drawn from {r.openings_label} active ministry job openings; {typeLabel} roles; data as of {longDay(r.as_of)}.
         A guide for planning, not a guarantee of what any candidate will accept.
