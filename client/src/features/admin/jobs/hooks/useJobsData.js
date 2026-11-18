@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchFilterOptions, fetchJobs, fetchSources, fetchSummary } from "@/api/admin.js";
 import { toQuery } from "@/api/http.js";
-import { EMPTY_FILTERS, filtersFromUrl, sourceFromUrl } from "../lib/filters.js";
+import { EMPTY_FILTERS, filtersFromUrl, sourceFromUrl, toggleSource } from "../lib/filters.js";
 
-// Everything the Jobs dashboard shows for the chosen source and filters. Filter changes are debounced and
+// Everything the Jobs dashboard shows for the chosen sources (one or more) and filters. Filter changes are debounced and
 // written to the URL; only the newest answer is kept when several requests overlap.
 export function useJobsData() {
   const [source, setSource] = useState(sourceFromUrl);
@@ -39,14 +39,16 @@ export function useJobsData() {
   }, [source, filters]);
 
   useEffect(() => {
-    const query = toQuery({ source: source === "json" ? "" : source, ...filters });
+    const query = toQuery({ source: source.join(",") === "json" ? "" : source.join(","), ...filters });
     window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
     const timer = setTimeout(load, 200);
     return () => clearTimeout(timer);
   }, [source, filters, load]);
 
-  // Filter values differ per source (roles, states, denominations), so a switch starts clean.
-  const changeSource = (next) => {
+  // Filter values differ per source (roles, states, denominations), so a change starts clean.
+  const changeSource = (key) => {
+    const next = toggleSource(source, key);
+    if (next === source) return;
     setSummary(null);
     setRows([]);
     setFilters(EMPTY_FILTERS);

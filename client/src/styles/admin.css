@@ -104,7 +104,7 @@ body {
 }
 .source { align-items: flex-start; color: var(--text); }
 .source:hover { border-color: #bdbdbd; }
-.source[aria-selected="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); cursor: default; }
+.source[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
 .source-label { font-weight: 600; font-size: 15px; }
 .source-meta { color: var(--text); font-size: 13px; }
 .source-note { color: var(--ink-muted); font-size: var(--fs-small); }

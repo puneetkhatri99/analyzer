@@ -18,7 +18,8 @@ class UnsafeURLError(ValueError):
 
 def with_scheme(url: str) -> str:
     """Feed and sheet links are often stored without a scheme."""
-    return url if url.startswith("http") else "https://" + url
+    # a full scheme check: some hosts start with "http" themselves (httpsladgovcomjobopenings.applytojob.com)
+    return url if url.lower().startswith(("http://", "https://")) else "https://" + url
 
 
 def url_key(url: str) -> str:

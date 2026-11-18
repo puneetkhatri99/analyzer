@@ -8,9 +8,17 @@ export const EMPTY_FILTERS = {
 
 export const isSet = (v) => v !== "" && v !== 0 && v !== false && v != null;
 
+// One source or several ("json,churches"), in SOURCES order; the feed when none is valid.
 export function sourceFromUrl(search = window.location.search) {
-  const s = new URLSearchParams(search).get("source");
-  return SOURCES.includes(s) ? s : "json";
+  const picked = (new URLSearchParams(search).get("source") || "").split(",");
+  const valid = SOURCES.filter((s) => picked.includes(s));
+  return valid.length ? valid : ["json"];
+}
+
+// Add or remove one source; the last one can't be removed.
+export function toggleSource(chosen, key) {
+  const next = SOURCES.filter((s) => (s === key ? !chosen.includes(s) : chosen.includes(s)));
+  return next.length ? next : chosen;
 }
 
 // Each value keeps the type of its empty default: numbers, booleans or text.

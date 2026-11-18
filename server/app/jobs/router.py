@@ -1,7 +1,7 @@
 """Admin-only views of the postings, per source, with links and counts (brief A1, A2)."""
 
 import logging
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -35,25 +35,33 @@ def job_filters(
     }  # fmt: skip
 
 
+def chosen_sources(source: str = "json") -> list[Source]:
+    """`source` is one source or several, comma-separated: "json,churches"."""
+    picked = list(dict.fromkeys(s.strip() for s in source.split(",") if s.strip()))
+    if not picked or any(s not in get_args(Source) for s in picked):
+        raise HTTPException(422, f"source must be one or more of {', '.join(get_args(Source))}")
+    return picked
+
+
 @router.get("/api/sources", dependencies=viewer_only, response_model=None)
 def sources() -> list[dict[str, Any]]:
     return repository.source_counts()
 
 
 @router.get("/api/filter-options", dependencies=viewer_only, response_model=None)
-def filter_options(source: Source = "json") -> dict[str, Any]:
-    return service.build_filter_options(repository.load_jobs(source))
+def filter_options(sources: list[Source] = Depends(chosen_sources)) -> dict[str, Any]:
+    return service.build_filter_options(repository.load_sources(sources))
 
 
 @router.get("/api/jobs", dependencies=viewer_only, response_model=None)
-def list_jobs(source: Source = "json", filters: dict = Depends(job_filters)) -> dict[str, Any]:
-    rows = service.apply_filters(repository.load_jobs(source), filters)
+def list_jobs(sources: list[Source] = Depends(chosen_sources), filters: dict = Depends(job_filters)) -> dict[str, Any]:
+    rows = service.apply_filters(repository.load_sources(sources), filters)
     return {"total": len(rows), "rows": rows}
 
 
 @router.get("/api/summary", dependencies=viewer_only, response_model=None)
-def summary(source: Source = "json", filters: dict = Depends(job_filters)) -> dict[str, Any]:
-    jobs = repository.load_jobs(source)
+def summary(sources: list[Source] = Depends(chosen_sources), filters: dict = Depends(job_filters)) -> dict[str, Any]:
+    jobs = repository.load_sources(sources)
     return service.build_summary(
         service.apply_filters(jobs, filters),
         service.apply_filters(jobs, filters, skip=("role",)),

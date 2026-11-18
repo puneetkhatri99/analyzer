@@ -32,3 +32,10 @@ def test_endless_redirects_stop(monkeypatch):
     monkeypatch.setattr(web.requests, "get", lambda url, **kw: _response(302, "/again"))
     with pytest.raises(web.UnsafeURLError, match="too many"):
         web.get_public("https://example.org/loop")
+
+
+def test_with_scheme_adds_https_even_when_the_host_starts_with_http():
+    assert web.with_scheme("httpsladgovcom.applytojob.com/apply/x") == "https://httpsladgovcom.applytojob.com/apply/x"
+    assert web.with_scheme("apply.workable.com/j/1") == "https://apply.workable.com/j/1"
+    assert web.with_scheme("http://a.org/j") == "http://a.org/j"
+    assert web.with_scheme("HTTPS://a.org/j") == "HTTPS://a.org/j"

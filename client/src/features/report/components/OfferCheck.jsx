@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { track } from "@/features/site/lead.js";
 import { offerVerdict, parseAmount, pay } from "../lib/pay.js";
+import { areaPhrase } from "./Breakdowns.jsx";
 import RangeBar from "./RangeBar.jsx";
 
 // "Check my offer": where a planned salary or hourly rate lands against current openings.
@@ -35,6 +36,8 @@ export default function OfferCheck({ r }) {
     <Card as="section" className="mh-card" data-reveal>
       <h2>Check my offer</h2>
       <p className="mh-muted">Enter the {what} you're planning to offer and see where it lands.</p>
+      {/* the place the figures really come from: " in the Midwest" when the search was widened */}
+      <p className="mh-offer-against">Checking against: <strong>{r.title.role}{areaPhrase(r) || " nationwide"}</strong></p>
       <form className="mh-offer" onSubmit={check}>
         <div className="mh-field">
           <Label htmlFor="offer-amount">Planned {what}</Label>

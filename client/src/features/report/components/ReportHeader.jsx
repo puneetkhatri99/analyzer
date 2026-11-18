@@ -3,7 +3,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ShareMenu from "./ShareMenu.jsx";
 
-// Title plus "New search", "Share" and "Download report" (prints the branded export; the browser saves it as a PDF).
+// Title plus "Share" and "Download report" (prints the branded export; the browser saves it as a PDF).
 export default function ReportHeader({ r }) {
   return (
     <div className="mh-report-head" data-reveal>
@@ -12,7 +12,6 @@ export default function ReportHeader({ r }) {
         <h1>{r ? <>{r.title.role} pay in <span className="mh-underline">{r.title.area}</span></> : "Loading your report…"}</h1>
       </div>
       <div className="mh-report-actions">
-        <Button asChild className="mh-btn mh-btn-outline"><a href="/" data-track>New search</a></Button>
         <ShareMenu r={r} />
         <Button type="button" className="mh-btn mh-btn-yellow" onClick={() => window.print()} disabled={!r}>
           <Download className="size-4" strokeWidth={2.2} aria-hidden="true" />

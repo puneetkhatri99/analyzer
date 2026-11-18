@@ -1,6 +1,5 @@
 import React from "react";
 import { count } from "@/lib/format.js";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const NOTES = {
   json: "Job feed with stated pay",
@@ -8,25 +7,23 @@ const NOTES = {
   nonprofits: "Excel leads · pay read from each job page",
 };
 
-// No tab panels: the tabs switch the data shown below, so each tab's aria-controls (pointing at a panel) is dropped.
+// Toggle buttons: any mix of sources can be shown together; at least one stays on.
 export default function SourceTabs({ sources, value, onChange }) {
   return (
-    <Tabs value={value} onValueChange={onChange}>
-      <TabsList aria-label="Data source" className="sources w-full bg-transparent p-0 group-data-[orientation=horizontal]/tabs:h-auto">
-        {(sources || [{ key: value, label: "…" }]).map((s) => (
-          <TabsTrigger key={s.key} value={s.key} aria-controls={undefined} className="source h-auto whitespace-normal data-[state=active]:shadow-none">
-            <span className="source-label">{s.label}</span>
-            {s.postings != null && (
-              <span className="source-meta num">
-                {count(s.postings)} postings · {count(s.paid)} with pay
-                {s.key !== "json" && s.fetched < s.postings && <> · {count(s.fetched)} pages read</>}
-                {s.expired > 0 && <> · {count(s.expired)} expired</>}
-              </span>
-            )}
-            <span className="source-note">{NOTES[s.key]}</span>
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </Tabs>
+    <div role="group" aria-label="Data sources (choose one or more)" className="sources">
+      {(sources || value.map((key) => ({ key, label: "…" }))).map((s) => (
+        <button type="button" key={s.key} aria-pressed={value.includes(s.key)} onClick={() => onChange(s.key)} className="source">
+          <span className="source-label">{s.label}</span>
+          {s.postings != null && (
+            <span className="source-meta num">
+              {count(s.postings)} postings · {count(s.paid)} with pay
+              {s.key !== "json" && s.fetched < s.postings && <> · {count(s.fetched)} pages read</>}
+              {s.expired > 0 && <> · {count(s.expired)} expired</>}
+            </span>
+          )}
+          <span className="source-note">{NOTES[s.key]}</span>
+        </button>
+      ))}
+    </div>
   );
 }

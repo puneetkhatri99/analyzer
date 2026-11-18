@@ -14,17 +14,18 @@ import KpiStrip from "./components/KpiStrip.jsx";
 import SourceTabs from "./components/SourceTabs.jsx";
 import { useJobsData } from "./hooks/useJobsData.js";
 
-// Admin only (brief A1, A2): every posting per source, with its pay benchmarks, source and link.
+// Admin only (brief A1, A2): every posting of the chosen sources, with its pay benchmarks, source and link.
 export default function JobsPage({ canEdit = false }) {
   const d = useJobsData();
   const [table, setTable] = useState(null);
   const [openJob, setOpenJob] = useState(null);
   const s = d.summary?.stats;
+  const hasChurches = d.source.some((x) => x !== "nonprofits");
 
   // every matching posting, in the table's current sort order
   const exportCsv = () => downloadCsv(toCsv(table.getSortedRowModel().rows.map((r) => r.original), CSV_COLUMNS),
-    `ministry-jobs-${d.source}-${new Date().toISOString().slice(0, 10)}.csv`);
-  const removeJob = () => deleteJob(d.source, openJob.post_uuid).then(() => { setOpenJob(null); d.reload(); });
+    `ministry-jobs-${d.source.join("-")}-${new Date().toISOString().slice(0, 10)}.csv`);
+  const removeJob = () => deleteJob(openJob.source, openJob.post_uuid).then(() => { setOpenJob(null); d.reload(); });
   const focusRow = (id) => document.querySelector(`button.job-title[data-id="${CSS.escape(id)}"]`)?.focus();
 
   return (
@@ -32,7 +33,7 @@ export default function JobsPage({ canEdit = false }) {
       <SourceTabs sources={d.sources} value={d.source} onChange={d.changeSource} />
       <JobsHeader source={d.source} sources={d.sources} filters={d.filters} stats={s} onExport={exportCsv} canExport={!!table} />
       <FilterBar filters={d.filters} setFilter={d.setFilter} clearFilter={d.clearFilter} resetFilters={d.resetFilters}
-        options={d.options} showChurchSize={d.source !== "nonprofits"} />
+        options={d.options} showChurchSize={hasChurches} />
 
       {d.error ? (
         <Alert variant="destructive">
@@ -45,7 +46,7 @@ export default function JobsPage({ canEdit = false }) {
       ) : (
         <div className={`dash-grid${d.updating && d.summary ? " is-updating" : ""}`} aria-busy={d.updating}>
           <div className="span-12"><KpiStrip stats={s} loading={!s} /></div>
-          <BenchmarkGrid summary={d.summary} filters={d.filters} setFilter={d.setFilter} isChurch={d.source !== "nonprofits"} />
+          <BenchmarkGrid summary={d.summary} filters={d.filters} setFilter={d.setFilter} isChurch={hasChurches} />
           <Card as="section" className="table-card span-12" aria-labelledby="h-postings">
             <CardHeader>
               <CardTitle id="h-postings">Postings</CardTitle>

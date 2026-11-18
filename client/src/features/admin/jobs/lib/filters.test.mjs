@@ -1,7 +1,7 @@
 // npm test
 import test from "node:test";
 import assert from "node:assert/strict";
-import { EMPTY_FILTERS, filtersFromUrl, sourceFromUrl } from "./filters.js";
+import { EMPTY_FILTERS, filtersFromUrl, sourceFromUrl, toggleSource } from "./filters.js";
 
 test("filters keep their types and ignore unknown keys", () => {
   const f = filtersFromUrl("?role=Missions&min_salary=50000&has_pay=true&bogus=1");
@@ -14,6 +14,13 @@ test("filters keep their types and ignore unknown keys", () => {
 
 test("bad numbers fall back to empty; unknown sources to the feed", () => {
   assert.equal(filtersFromUrl("?min_church_size=lots").min_church_size, 0);
-  assert.equal(sourceFromUrl("?source=elsewhere"), "json");
-  assert.equal(sourceFromUrl("?source=churches"), "churches");
+  assert.deepEqual(sourceFromUrl("?source=elsewhere"), ["json"]);
+  assert.deepEqual(sourceFromUrl("?source=churches"), ["churches"]);
+  assert.deepEqual(sourceFromUrl("?source=nonprofits,bogus,json"), ["json", "nonprofits"]);
+});
+
+test("sources toggle on and off, but the last one stays", () => {
+  assert.deepEqual(toggleSource(["json"], "nonprofits"), ["json", "nonprofits"]);
+  assert.deepEqual(toggleSource(["json", "nonprofits"], "json"), ["nonprofits"]);
+  assert.deepEqual(toggleSource(["churches"], "churches"), ["churches"]);
 });

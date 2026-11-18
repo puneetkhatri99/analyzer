@@ -11,7 +11,7 @@ const SHOWN_DENOMINATIONS = 3;
 
 // On wide screens the filters sit open beside the report; on narrow ones they fold away above it,
 // so the answer is on the first screen instead of below a long panel.
-// `f` is a draft: changes show in the report only after "Update report" (apply).
+// `f` is a draft: changes show in the report only after "Search" (apply), placed after the last filter.
 export default function RefinePanel({ f, opts, setF, apply, pending, reset, changed }) {
   const wide = useMediaQuery("(min-width: 960px)");
   const [open, setOpen] = useState(false);
@@ -33,13 +33,6 @@ export default function RefinePanel({ f, opts, setF, apply, pending, reset, chan
           )}
         </div>
         <CollapsibleContent className="mh-refine-body">
-          <div className="mh-refine-actions">
-            <Button type="button" className="mh-btn mh-btn-teal" disabled={!pending} onClick={() => { apply(); setOpen(false); }}>
-              Update report
-            </Button>
-            {changed && <button type="button" className="mh-link mh-reset" onClick={reset}>Reset filters</button>}
-          </div>
-          {pending && <p className="mh-muted mh-pending" role="status">Click Update report to see these changes.</p>}
           <ChipPicker label="Role" values={f.role} options={opts.roles} onChange={set("role")} />
           <ChipPicker label="State" values={f.state} options={opts.states} onChange={set("state")} />
           <CheckGroup label="Weekly attendance" options={opts.sizes} values={f.size} onChange={set("size")} />
@@ -50,6 +43,13 @@ export default function RefinePanel({ f, opts, setF, apply, pending, reset, chan
             </button>
           )}
           <JobTypeGroup types={opts.job_types} value={f.type} onChange={set("type")} />
+          {pending && <p className="mh-muted mh-pending" role="status">Click Search to see these changes.</p>}
+          <div className="mh-refine-actions">
+            <Button type="button" className="mh-btn mh-btn-teal" disabled={!pending} onClick={() => { apply(); setOpen(false); }}>
+              Search
+            </Button>
+            {changed && <button type="button" className="mh-link mh-reset" onClick={reset}>Reset filters</button>}
+          </div>
         </CollapsibleContent>
       </aside>
     </Collapsible>

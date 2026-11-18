@@ -12,6 +12,7 @@ import psycopg
 
 from app.core.db import get_conn
 from app.jobs.roles import bucket_role
+from app.shared.geo import state_name
 from app.shared.web import with_scheme
 
 Source = Literal["json", "churches", "nonprofits"]
@@ -95,8 +96,16 @@ def load_jobs(source: Source = "json") -> list[dict[str, Any]]:
         d["salary_annual_mid"] = annual
         if d["post_url"]:
             d["post_url"] = with_scheme(d["post_url"])
+        d["region"] = state_name(d["region"]) or d["region"]  # sheets say "TX", the feed "Texas"
+        d["source"] = source  # rows from several sources share one table; deleting needs the source
         jobs.append(d)
     return jobs
+
+
+def load_sources(sources: list[Source]) -> list[dict[str, Any]]:
+    """The postings of several sources together."""
+    # shortcut: a job listed in two sources counts twice, dedupe by url_key if mixed totals matter
+    return [job for s in sources for job in load_jobs(s)]
 
 
 def source_counts() -> list[dict[str, Any]]:

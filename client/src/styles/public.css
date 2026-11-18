@@ -135,7 +135,7 @@
 .mh-report { padding-top: 48px; }
 .mh-report-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 28px; }
 .mh-report-head h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 800; line-height: 1.06; letter-spacing: -0.025em; margin-top: 10px; }
-.mh-report-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.mh-report-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-left: auto; } /* stays right even when it wraps under the title */
 .mh-report-grid { display: grid; gap: 28px; align-items: start; }
 @media (min-width: 960px) { .mh-report-grid { grid-template-columns: 300px 1fr; gap: 32px; } }
 .mh-report-main { display: grid; gap: 24px; min-width: 0; transition: opacity .2s ease; }
@@ -151,7 +151,7 @@
 .mh-reset { justify-self: start; }
 .mh-refine-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .mh-refine-actions .mh-btn { min-height: 44px; }
-.mh-pending { margin-top: -10px; font-size: var(--fs-small); }
+.mh-pending { font-size: var(--fs-small); }
 .mh-reset:disabled { opacity: .45; cursor: default; text-decoration: none; }
 .mh-filter { border: 0; padding: 0; margin: 0; display: grid; gap: 10px; }
 .mh-filter h3, .mh-filter legend { font-size: var(--fs-small); font-weight: 700; color: var(--mh-ink); padding: 0; margin-bottom: 4px; }
@@ -208,6 +208,7 @@
 .mh-offer { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .mh-offer .mh-field { width: min(240px, 100%); }
 .mh-offer-verdict { font-size: var(--fs-body); }
+.mh-offer-against { margin-top: 8px; font-size: var(--fs-small); }
 
 .mh-bars { display: grid; gap: 10px; }
 .mh-bar-row { display: grid; grid-template-columns: minmax(90px, 180px) 1fr auto; gap: 14px; align-items: center; font-size: var(--fs-small); }
