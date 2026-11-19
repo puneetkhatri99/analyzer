@@ -25,10 +25,10 @@ import requests
 from app.ai_usage.service import current_run
 from app.core.config import get_settings
 from app.core.logs import script_log
+from app.core.settings_store import get_setting, set_setting
 from app.ingestion import bizdev_enrich, daily_feed
 from app.ingestion.bizdev import import_file
 from app.jobs.repository import BIZDEV_TABLES
-from app.leads.daily_report import get_setting, set_setting
 from app.shared.web import UnsafeURLError, get_public
 
 log = logging.getLogger("bizdev_sync")

@@ -7,8 +7,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import require_admin
+from app.core.settings_store import get_setting, set_setting
 from app.ingestion import daily_feed as feed
-from app.leads.daily_report import email_ready, get_setting, set_setting
+from app.shared.email import email_ready
 
 log = logging.getLogger("admin")
 

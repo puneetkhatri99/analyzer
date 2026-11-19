@@ -8,10 +8,10 @@ from contextvars import ContextVar
 from typing import Any
 
 from psycopg.rows import dict_row
-from psycopg.types.json import Jsonb
 
 from app.core.config import get_settings
 from app.core.db import get_conn
+from app.core.settings_store import delete_setting, get_setting, set_setting
 from app.shared.web import with_scheme
 
 # List prices in USD: per 1M tokens (input, cached input, output), and per web search call.
@@ -68,23 +68,16 @@ def month_spend() -> float:
 
 
 def get_limit() -> float | None:
-    with get_conn() as conn:
-        row = conn.execute("SELECT value FROM public.app_settings WHERE key = %s", (LIMIT_KEY,)).fetchone()
-    return float(row[0]) if row and row[0] is not None else None
+    value = get_setting(LIMIT_KEY)
+    return None if value is None else float(value)
 
 
 def set_limit(limit: float | None, by: str) -> None:
     """Save the monthly limit in dollars; None removes it."""
-    with get_conn() as conn:
-        if limit is None:
-            conn.execute("DELETE FROM public.app_settings WHERE key = %s", (LIMIT_KEY,))
-        else:
-            conn.execute(
-                """INSERT INTO public.app_settings (key, value, updated_by) VALUES (%s, %s, %s)
-                   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(),
-                     updated_by = EXCLUDED.updated_by""",
-                (LIMIT_KEY, Jsonb(limit), by),
-            )
+    if limit is None:
+        delete_setting(LIMIT_KEY)
+    else:
+        set_setting(LIMIT_KEY, limit, by=by)
 
 
 def budget() -> dict[str, Any]:

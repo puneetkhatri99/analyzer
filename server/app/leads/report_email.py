@@ -11,8 +11,8 @@ from psycopg.types.json import Jsonb
 
 from app.core.config import get_settings
 from app.core.db import get_conn
-from app.leads.daily_report import EmailError, email_ready, send_email
 from app.report.service import FILTER_KEYS, blended_jobs, build_report, report_options
+from app.shared.email import EmailError, email_ready, send_email
 from app.shared.geo import state_name
 
 log = logging.getLogger("leads")

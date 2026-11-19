@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 import pytest
+import requests
 
 from app.core.config import get_settings
 from app.leads import daily_report as dr
@@ -17,7 +18,7 @@ def resend(monkeypatch):
         box.sent.append(json)
         return SimpleNamespace(ok=not box.fail, status_code=422 if box.fail else 200, text="domain not verified")
 
-    monkeypatch.setattr(dr.requests, "post", post)
+    monkeypatch.setattr(requests, "post", post)
     monkeypatch.setattr(get_settings(), "resend_api_key", "re_test")
     monkeypatch.setattr(get_settings(), "alert_from_email", "Leads <alerts@example.invalid>")
     monkeypatch.setattr(dr, "script_log", lambda name: "")  # keep test runs out of the log files and Axiom

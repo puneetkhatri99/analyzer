@@ -9,6 +9,7 @@ import decimal
 from typing import Any, Literal
 
 import psycopg
+from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from app.core.db import get_conn
@@ -29,23 +30,26 @@ COLUMNS = [
     "first_indexed", "pull_date", "origin", "added_at", "church_size_source", "reviewed",
 ]  # fmt: skip
 
+# Every SELECT names its columns (AS) exactly as COLUMNS, in the same order: rows are read by name, not by position.
 # reviewed: the feed's AI review (or an admin) has judged the posting in scope; the public report waits for it.
 _FEED_SQL = """
-    SELECT p.post_uuid, p.job_name_raw, p.department, p.hours,
+    SELECT p.post_uuid, p.job_name_raw AS job_name, p.department, p.hours,
            p.seniority, p.remote, p.board_source, p.post_url, p.city, p.region, p.country,
            c.company_name, c.denomination, c.church_size,
            p.salary_min, p.salary_max, p.salary_period,
-           p.first_indexed, p.pull_date, 'feed', p.created_at, c.church_size_url, p.scope_checked_at IS NOT NULL
+           p.first_indexed, p.pull_date, 'feed' AS origin, p.created_at AS added_at,
+           c.church_size_url AS church_size_source, p.scope_checked_at IS NOT NULL AS reviewed
     FROM public.postings p
     LEFT JOIN public.companies c USING (company_uuid)
 """
 
 # The BizDev tables mapped onto the feed's columns. Contact names and emails are never selected.
 _BIZDEV_SQL = """
-    SELECT url_key, job_title, NULL, hours, NULL, remote, split_part(url_key, '/', 1), job_url,
-           city, state, 'United States', org_name, denomination, church_size,
-           salary_min, salary_max, salary_period, date_posted, fetched_at::date,
-           added_via, imported_at, church_size_source, true
+    SELECT url_key AS post_uuid, job_title AS job_name, NULL AS department, hours, NULL AS seniority, remote,
+           split_part(url_key, '/', 1) AS board_source, job_url AS post_url,
+           city, state AS region, 'United States' AS country, org_name AS company_name, denomination, church_size,
+           salary_min, salary_max, salary_period, date_posted AS first_indexed, fetched_at::date AS pull_date,
+           added_via AS origin, imported_at AS added_at, church_size_source, true AS reviewed
     FROM public.{table}
 """
 
@@ -71,11 +75,11 @@ def load_jobs(source: Source = "json") -> list[dict[str, Any]]:
     cache to invalidate when the pipeline re-runs.
     """
     with get_conn() as conn:
-        rows = conn.execute(SOURCES[source]["sql"]).fetchall()
+        rows = conn.cursor(row_factory=dict_row).execute(SOURCES[source]["sql"]).fetchall()
 
     jobs = []
     for row in rows:
-        d = {c: _json_value(v) for c, v in zip(COLUMNS, row, strict=True)}
+        d = {c: _json_value(v) for c, v in row.items()}
         d["role"] = bucket_role(d["job_name"])
         lo, hi, period = d["salary_min"], d["salary_max"], d["salary_period"]
         annual = None
@@ -103,7 +107,7 @@ def source_counts() -> list[dict[str, Any]]:
     with get_conn() as conn:
         for key, s in SOURCES.items():
             postings, paid, fetched = conn.execute(
-                f"SELECT count(*), count(salary_min), count(pull_date) FROM ({s['sql']}) j({', '.join(COLUMNS)})"
+                f"SELECT count(*), count(salary_min), count(pull_date) FROM ({s['sql']}) j"
             ).fetchone()
             out.append({"key": key, "label": s["label"], "postings": postings, "paid": paid, "fetched": fetched})
     return out

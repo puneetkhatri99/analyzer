@@ -17,54 +17,28 @@ import threading
 from datetime import date, timedelta
 from typing import Any
 
-import requests
 from psycopg.rows import dict_row
-from psycopg.types.json import Jsonb
 
 from app.core.config import get_settings
 from app.core.db import get_conn
 from app.core.logs import script_log
+from app.core.settings_store import get_setting, set_setting
 from app.leads import HOT_AT_REPORTS
+from app.shared.email import EmailError, email_ready, send_email
 
 log = logging.getLogger("daily_report")
 
 TZ = "America/New_York"
 SEND_FROM_HOUR = 8  # New York time: yesterday's report goes out from 8 AM, or as soon as the server is awake after
-RESEND_URL = "https://api.resend.com/emails"
 RECIPIENTS = "hot_lead_emails"  # app_settings keys
 SENT_FOR = "daily_report_sent_for"
-
-
-class EmailError(Exception):
-    pass
 
 
 # ---- settings -------------------------------------------------------------------------------------------------
 
 
-def get_setting(key: str, default: Any = None) -> Any:
-    with get_conn() as conn:
-        row = conn.execute("SELECT value FROM public.app_settings WHERE key = %s", (key,)).fetchone()
-    return row[0] if row else default
-
-
-def set_setting(key: str, value: Any, by: str | None = None) -> None:
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT INTO public.app_settings (key, value, updated_by) VALUES (%s, %s, %s)
-               ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now(),
-                 updated_by = EXCLUDED.updated_by""",
-            (key, Jsonb(value), by),
-        )
-
-
 def get_recipients() -> list[str]:
     return get_setting(RECIPIENTS, [])
-
-
-def email_ready() -> bool:
-    s = get_settings()
-    return bool(s.resend_api_key and s.alert_from_email)
 
 
 def eastern_now() -> tuple[date, int]:
@@ -152,21 +126,6 @@ def render(data: dict[str, Any]) -> tuple[str, str]:
         f"See every lead and their history: {get_settings().site_url.rstrip('/')}/admin#leads",
     ]
     return subject, "\n".join(lines)
-
-
-def send_email(to: list[str], subject: str, text: str) -> None:
-    s = get_settings()
-    try:
-        r = requests.post(
-            RESEND_URL,
-            headers={"Authorization": f"Bearer {s.resend_api_key}"},
-            json={"from": s.alert_from_email, "to": to, "subject": subject, "text": text},
-            timeout=10,
-        )
-    except requests.RequestException as e:
-        raise EmailError(f"couldn't reach Resend ({e.__class__.__name__})") from e
-    if not r.ok:
-        raise EmailError(f"Resend refused the email ({r.status_code}): {r.text[:200]}")
 
 
 def send_report(day: date) -> int:

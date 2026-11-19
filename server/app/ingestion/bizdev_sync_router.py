@@ -7,9 +7,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import require_admin
+from app.core.settings_store import get_setting, set_setting
 from app.ingestion import bizdev_sync as sync
 from app.jobs.repository import BizdevSource
-from app.leads.daily_report import get_setting, set_setting
 
 log = logging.getLogger("admin")
 

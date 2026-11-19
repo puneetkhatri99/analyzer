@@ -30,6 +30,7 @@ from app.ai_usage.service import budget, current_run, ensure_budget, record
 from app.core.config import get_settings
 from app.core.db import get_conn
 from app.core.logs import script_log
+from app.core.settings_store import delete_setting, get_setting, set_setting
 from app.extraction.page import page_text
 from app.extraction.prompts import FENCE_RE, INJECTION_RE, REVIEW_INSTRUCTIONS
 from app.extraction.schemas import JobExtraction, PostingReview
@@ -38,7 +39,8 @@ from app.extraction.validation import complete_pay, found_on_page, validate
 from app.ingestion.feed import load_posting
 from app.job_pages.parser import denomination_in
 from app.jobs.repository import reject_posting
-from app.leads.daily_report import EmailError, email_ready, get_recipients, get_setting, send_email, set_setting
+from app.leads.daily_report import get_recipients
+from app.shared.email import EmailError, email_ready, send_email
 from app.shared.web import UnsafeURLError, get_public
 
 log = logging.getLogger("daily_feed")
@@ -550,5 +552,4 @@ def start_scheduler() -> threading.Event:
 
 def forget_today() -> None:
     """After a new link is saved: let the timer try again today."""
-    with get_conn() as conn:
-        conn.execute("DELETE FROM public.app_settings WHERE key = %s", (DONE_KEY,))
+    delete_setting(DONE_KEY)
