@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MENU_SECTIONS, TABS, can } from "./access.js";
 import AddJobPage from "./add-job/AddJobPage.jsx";
@@ -16,14 +17,14 @@ import UsersPage from "./users/UsersPage.jsx";
 const PASSWORD = "password"; // opened from the profile menu, so it has no tab of its own
 const PANEL = "flex min-w-0 flex-col gap-3";
 
-// The hash keeps the open section across reloads: /admin#users
+// The open section lives in the path: /admin/users
 function useSection() {
-  const [section, setSection] = useState(window.location.hash.slice(1) || "jobs");
-  const show = (next) => {
-    setSection(next);
-    window.history.replaceState(null, "", next === "jobs" ? window.location.pathname + window.location.search : `#${next}`);
-  };
-  return [section, show];
+  const navigate = useNavigate();
+  const section = useLocation().pathname.split("/")[2] || "jobs";
+  return [section, (next) => {
+    const path = next === "jobs" ? "/admin" : `/admin/${next}`;
+    if (path !== window.location.pathname) navigate(path); // Radix fires the change on focus and again on click
+  }];
 }
 
 export default function AdminApp() {

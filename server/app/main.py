@@ -30,7 +30,7 @@ from app.leads.router import router as leads_router
 from app.report.router import router as report_router
 
 CLIENT_DIST = Path(__file__).resolve().parents[2] / "client" / "dist"
-CLIENT_PAGES = ("/admin", "/report")  # client-side routes: serve the app's page for them
+CLIENT_PAGES = ("/admin", "/admin/{section}", "/report")  # client-side routes: serve the app's page for them
 
 log = logging.getLogger("api")
 
