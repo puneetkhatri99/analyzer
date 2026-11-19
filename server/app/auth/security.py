@@ -21,16 +21,23 @@ MIN_PASSWORD = 8
 ROLES = ("viewer", "editor", "admin")
 
 
+# Each scrypt hash takes 16 MB of memory; a burst of sign-in attempts mustn't run the 512 MB server out of it.
+_hashing = threading.BoundedSemaphore(4)
+
+
+def _scrypt(password: str, salt: bytes) -> bytes:
+    with _hashing:
+        return hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1)
+
+
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
-    digest = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1)
-    return f"scrypt${salt.hex()}${digest.hex()}"
+    return f"scrypt${salt.hex()}${_scrypt(password, salt).hex()}"
 
 
 def verify_password(password: str, stored: str) -> bool:
     _, salt, digest = stored.split("$")
-    computed = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1).hex()
-    return hmac.compare_digest(computed, digest)
+    return hmac.compare_digest(_scrypt(password, bytes.fromhex(salt)).hex(), digest)
 
 
 # Checked for unknown emails, so response time doesn't reveal which accounts exist.

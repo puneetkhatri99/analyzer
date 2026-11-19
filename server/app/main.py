@@ -20,7 +20,11 @@ from app.core.config import get_settings
 from app.core.db import close_pool, open_pool
 from app.core.logs import api_log, request_id
 from app.extraction.router import router as extraction_router
+from app.ingestion import bizdev_sync, daily_feed
+from app.ingestion.bizdev_sync_router import router as bizdev_sync_router
+from app.ingestion.feed_router import router as feed_router
 from app.jobs.router import router as jobs_router
+from app.leads import daily_report
 from app.leads.router import admin_router as leads_admin_router
 from app.leads.router import router as leads_router
 from app.report.router import router as report_router
@@ -36,7 +40,21 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     api_log()  # on server start, not on import, so the tests don't write into the real log files
     open_pool()
     log.info("API started")
+    if get_settings().app_env == "production" and "localhost" in get_settings().site_url:
+        log.error("SITE_URL isn't set: links in emails (reports, alerts) point to %s", get_settings().site_url)
+    # The daily lead report without a paid cron job; production only, so a local server never sends it
+    send_daily = get_settings().app_env == "production" and daily_report.email_ready()
+    stop_daily = daily_report.start_scheduler() if send_daily else None
+    # The daily jobs feed (app/ingestion/daily_feed.py), also production only
+    stop_feed = daily_feed.start_scheduler() if get_settings().app_env == "production" else None
+    stop_bizdev = bizdev_sync.start_scheduler() if get_settings().app_env == "production" else None
     yield
+    if stop_bizdev:
+        stop_bizdev.set()
+    if stop_daily:
+        stop_daily.set()
+    if stop_feed:
+        stop_feed.set()
     close_pool()
     log.info("API stopped")
 
@@ -80,7 +98,9 @@ async def _log_request(request: Request, call_next: Callable[[Request], Awaitabl
     ms = round((time.perf_counter() - start) * 1000)
     path, fields = _fields(request, ip)
     response.headers["X-Request-ID"] = rid
-    noise = request.url.path == "/api/health" or not request.url.path.startswith("/api")
+    # the admin page polls /api/admin/feed every 2 s while a feed run is going
+    polling = request.method == "GET" and request.url.path == "/api/admin/feed"
+    noise = request.url.path == "/api/health" or polling or not request.url.path.startswith("/api")
     if noise and response.status_code < 400:
         return response
     level = logging.WARNING if response.status_code >= 400 else logging.INFO
@@ -121,6 +141,8 @@ def create_app() -> FastAPI:
         auth_router,
         extraction_router,
         ai_usage_router,
+        feed_router,
+        bizdev_sync_router,
     ):
         app.include_router(router)
 

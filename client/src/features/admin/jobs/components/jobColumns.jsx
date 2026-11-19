@@ -1,5 +1,4 @@
 import React from "react";
-import { Badge } from "@/components/ui/badge";
 import { ORIGINS, isoDate, listedPay } from "@/lib/format.js";
 
 const Dash = () => <span className="dash">—</span>;
@@ -8,19 +7,9 @@ const payText = (d) => {
   const p = listedPay(d);
   return p ? `${p.amount} ${p.unit}` : "";
 };
-const statusText = (d) => (d.status === "expired" ? `Expired ${isoDate(d.expired_at)}` : d.status === "open" ? "Open" : "Not verified");
 
 // Narrow screens hide the less important columns, widest-needed last (same order Tabulator used).
 export const HIDE = { 1: "hidden sm:table-cell", 2: "hidden md:table-cell", 3: "hidden lg:table-cell", 4: "hidden 2xl:table-cell" };
-
-function Status({ d }) {
-  if (d.status === "expired") {
-    return <Badge variant="outline" className="border-transparent px-0 text-destructive" title={d.last_live_at ? `Last seen open ${isoDate(d.last_live_at)}` : "Never seen open"}>
-      Expired <span className="num">{isoDate(d.expired_at)}</span></Badge>;
-  }
-  if (d.status === "open") return <Badge variant="secondary" title={`Checked open on ${isoDate(d.last_live_at)}`}>Open</Badge>;
-  return <Badge variant="outline" className="text-muted-foreground" title="The job page couldn't be read, so it isn't known whether it's still open">Not verified</Badge>;
-}
 
 export const COLUMNS = [
   {
@@ -43,7 +32,6 @@ export const COLUMNS = [
       return p ? <><span className="num">{p.amount}</span><span className="pay-unit">{p.unit}</span></> : <Dash />;
     },
   },
-  { id: "status", header: "Status", accessorKey: "status", meta: { hide: 3 }, cell: ({ row: { original: d } }) => <Status d={d} /> },
   {
     id: "origin", header: "Added via", accessorKey: "origin", meta: { hide: 2 },
     cell: ({ row: { original: d } }) => <span className="origin" title={`Added ${isoDate(d.added_at)}`}>{ORIGINS[d.origin] || d.origin}</span>,
@@ -59,7 +47,6 @@ export const CSV_COLUMNS = [
   ["Denomination", (d) => d.denomination],
   ["Location", location],
   ["Pay", payText],
-  ["Status", statusText],
   ["Added via", (d) => ORIGINS[d.origin] || d.origin],
   ["Type", (d) => d.hours],
   ["Posted", (d) => isoDate(d.first_indexed)],

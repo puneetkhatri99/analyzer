@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { ChevronDown, Search } from "lucide-react";
-import { count, money } from "@/lib/format.js";
+import { ORIGIN_FILTERS, count, money } from "@/lib/format.js";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import ActiveFilters from "./ActiveFilters.jsx";
-import { ORIGIN, STATUS } from "./filterLabels.js";
+import { isSet } from "../lib/filters.js";
 import FilterSelect from "./FilterSelect.jsx";
 
 const CHURCH_SIZES = [
@@ -16,7 +16,7 @@ const CHURCH_SIZES = [
   [5000, "5,000+ attendance"],
 ];
 const MIN_PAY = [30000, 40000, 50000, 60000, 80000, 100000];
-const MORE_KEYS = ["status", "origin", "country", "remote", "min_salary", "has_pay"];
+const MORE_KEYS = ["origin", "country", "remote", "min_salary", "has_pay"];
 const counted = (pairs) => pairs.map(([name, n]) => [name, `${name} (${count(n)})`]);
 
 export default function FilterBar({ filters, setFilter, clearFilter, resetFilters, options: opts, showChurchSize = true }) {
@@ -24,7 +24,7 @@ export default function FilterBar({ filters, setFilter, clearFilter, resetFilter
   const [moreOpen, setMoreOpen] = useState(moreActive > 0);
   const [panelOpen, setPanelOpen] = useState(false);
   const o = opts || { roles: [], denominations: [], regions: [], countries: [], hours: [] };
-  const active = Object.entries(filters).filter(([, v]) => v !== "" && v !== 0 && v !== false);
+  const active = Object.entries(filters).filter(([, v]) => isSet(v));
   const number = (key) => (v) => setFilter(key, Number(v) || 0);
 
   return (
@@ -56,8 +56,7 @@ export default function FilterBar({ filters, setFilter, clearFilter, resetFilter
         </div>
 
         <CollapsibleContent className="more-row">
-          <FilterSelect id="f-status" label="Job status" value={filters.status} onChange={(v) => setFilter("status", v)} all="Open or expired" options={Object.entries(STATUS)} />
-          <FilterSelect id="f-origin" label="Added via" value={filters.origin} onChange={(v) => setFilter("origin", v)} all="Any origin" options={Object.entries(ORIGIN)} />
+          <FilterSelect id="f-origin" label="Added via" value={filters.origin} onChange={(v) => setFilter("origin", v)} all="Any origin" options={Object.entries(ORIGIN_FILTERS)} />
           <FilterSelect id="f-country" label="Country" value={filters.country} onChange={(v) => setFilter("country", v)} all="All countries" options={counted(o.countries)} />
           <FilterSelect id="f-remote" label="Remote" value={filters.remote} onChange={(v) => setFilter("remote", v)} all="Remote or on-site"
             options={[["true", "Remote only"], ["false", "On-site only"]]} />

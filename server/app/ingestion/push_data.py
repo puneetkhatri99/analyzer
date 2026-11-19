@@ -1,11 +1,14 @@
-"""push-data: copy the BizDev tables and job-status checks from the local database to the hosted one (Neon).
+"""push-data: copy the BizDev tables and the jobs feed, with its review results, from the local database to the
+hosted one (Neon).
 
   NEON_URL="postgresql://..." python -m app.cli push-data      # Neon's direct URL, not the -pooler one
 
 Local rows are inserted or replace the hosted row with the same key; rows that exist only in the hosted database
-(jobs admins added there, collector runs there) are kept. Run `migrate` against both databases first: they must be on
-the same migration. Everything runs in one transaction: if any step fails, the hosted database is left unchanged.
-The feed tables (postings, companies, posting_snapshots) are not copied; their counts are compared in the log.
+(jobs admins added there, collector runs there) are kept. The feed's review results travel with its tables (which
+postings are judged, employer types, church sizes, pay, the rejected jobs), and a posting rejected locally is then
+removed from the hosted job tables too, so production needn't pay the AI to judge everything again.
+Run `migrate` against both databases first: they must be on the same migration. Everything runs in one
+transaction: if any step fails, the hosted database is left unchanged.
 """
 
 import argparse
@@ -18,8 +21,14 @@ from app.core.config import get_settings
 from app.core.db import connect
 from app.core.logs import script_log
 
-TABLES = {"church_jobs": "url_key", "nonprofit_jobs": "url_key", "posting_checks": "post_uuid"}  # table -> primary key
-FEED_TABLES = ["postings", "companies", "posting_snapshots"]
+# table -> the key a local row replaces a hosted row by; in this order, so every reference lands after its target
+TABLES = {
+    "church_jobs": "url_key",
+    "nonprofit_jobs": "url_key",
+    "companies": "company_uuid",
+    "postings": "post_uuid",
+    "rejected_postings": "post_uuid",
+}
 
 log = logging.getLogger("push_data")
 
@@ -45,7 +54,7 @@ def _schema_version(conn: psycopg.Connection) -> int:
 
 
 def register(commands: argparse._SubParsersAction) -> None:
-    parser = commands.add_parser("push-data", help="copy BizDev tables and job checks to the hosted database")
+    parser = commands.add_parser("push-data", help="copy the BizDev tables and the jobs feed to the hosted database")
     parser.set_defaults(handler=_run)
 
 
@@ -82,7 +91,7 @@ def _run(args: argparse.Namespace) -> int:
             ):
                 for chunk in out:
                     into.write(chunk)
-            updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in cols if c != key)
+            updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in cols if c not in key.split(", "))
             dst.execute(
                 f"INSERT INTO public.{table} ({col_list}) SELECT {col_list} FROM {staging} "
                 f"ON CONFLICT ({key}) DO UPDATE SET {updates}"
@@ -91,17 +100,14 @@ def _run(args: argparse.Namespace) -> int:
             if local != copied:
                 raise RuntimeError(f"{table}: copied {copied} rows but local has {local}")
             hosted_only = dst.execute(
-                f"SELECT count(*) FROM public.{table} WHERE {key} NOT IN (SELECT {key} FROM {staging})"
+                f"SELECT count(*) FROM public.{table} WHERE ({key}) NOT IN (SELECT {key} FROM {staging})"
             ).fetchone()[0]
             log.info("%s: %d rows copied; %d rows only in the hosted database kept", table, copied, hosted_only)
-        for table in FEED_TABLES:
-            local, hosted = _count(src, table), _count(dst, table)
-            (log.info if local == hosted else log.warning)(
-                "%s (not copied): local %d, hosted %d%s",
-                table,
-                local,
-                hosted,
-                "" if local == hosted else ": they differ",
-            )
+        # rejected locally: out of the hosted job tables as well (its copy is kept in rejected_postings)
+        rejected = "SELECT post_uuid FROM public.rejected_postings"
+        gone = dst.execute(f"DELETE FROM public.postings WHERE post_uuid IN ({rejected})").rowcount
+        waiting = dst.execute("SELECT count(*) FROM public.postings WHERE scope_checked_at IS NULL").fetchone()[0]
+        log.info("Hosted: %d rejected postings removed from the job tables; %d postings still await review", gone,
+                 waiting)  # fmt: skip
     log.info("Done: hosted database updated.")
     return 0

@@ -4,10 +4,12 @@ import logging
 from typing import Any, Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import require_editor, require_viewer
+from app.core.db import get_conn
 from app.jobs import repository, service
-from app.jobs.repository import Source
+from app.jobs.repository import BizdevSource, Source
 
 router = APIRouter(tags=["jobs"])
 viewer_only = [Depends(require_viewer)]
@@ -20,7 +22,6 @@ def job_filters(
     region: str | None = None,
     country: str | None = None,
     hours: str | None = None,
-    status: Literal["open", "expired", "unverified"] | None = None,
     origin: Literal["feed", "excel", "admin", "collector"] | None = None,
     remote: str | None = None,
     search: str | None = None,
@@ -30,7 +31,8 @@ def job_filters(
 ) -> dict[str, Any]:
     return {
         "role": role, "denomination": denomination, "region": region, "country": country,
-        "hours": hours, "status": status, "origin": origin, "remote": remote, "search": search, "has_pay": has_pay,
+        "hours": hours, "origin": origin, "remote": remote, "search": search,
+        "has_pay": has_pay,
         "min_salary": min_salary, "min_church_size": min_church_size,
     }  # fmt: skip
 
@@ -69,10 +71,60 @@ def summary(sources: list[Source] = Depends(chosen_sources), filters: dict = Dep
     )
 
 
+class Rejection(BaseModel):
+    id: str = Field(min_length=1, max_length=200)  # the feed posting's post_uuid
+    reason: str | None = Field(default=None, max_length=300)
+
+
+class Restore(BaseModel):
+    id: str = Field(min_length=1, max_length=200)
+
+
+@router.get("/api/admin/rejected", dependencies=viewer_only, response_model=None)
+def rejected() -> dict[str, Any]:
+    """Feed postings judged out of scope, with the reason; the daily feed skips them."""
+    rows = repository.rejected_postings()
+    return {"total": len(rows), "rows": rows}
+
+
+@router.post("/api/admin/jobs/reject")
+def reject_job(body: Rejection, admin_email: str = Depends(require_editor)) -> dict[str, bool]:
+    """Move a feed posting to the rejected jobs: out of every view and figure, skipped if the feed sends it again."""
+    reason = (body.reason or "").strip() or "Rejected by an admin"
+    with get_conn() as conn, conn.transaction():
+        if not repository.reject_posting(conn, body.id, reason, admin_email):
+            raise HTTPException(404, "No such feed posting")
+    log.info("Rejected by %s: %s (%s)", admin_email, body.id, reason)
+    return {"rejected": True}
+
+
+@router.post("/api/admin/rejected/restore")
+def restore_job(body: Restore, admin_email: str = Depends(require_editor)) -> dict[str, bool]:
+    """Put a rejected posting back among the jobs; the AI won't reject it again."""
+    if not repository.restore_posting(body.id):
+        raise HTTPException(404, "No such rejected posting")
+    log.info("Included again by %s: %s", admin_email, body.id)
+    return {"restored": True}
+
+
+@router.get("/api/admin/jobs/contact", response_model=None)
+def job_contact(source: BizdevSource, id: str, admin_email: str = Depends(require_editor)) -> dict[str, Any]:  # noqa: A002
+    """Who to contact about one BizDev job: name, title and email from the sheet. Editors and admins only, and the
+    lookup is logged (who and which job, never the contact). Feed jobs have no contact."""
+    contact = repository.job_contact(source, id)
+    if contact is None:
+        raise HTTPException(404, "No such job")
+    log.info("Contact of %s job %s viewed by %s", source, id, admin_email)
+    return contact
+
+
 @router.delete("/api/admin/jobs")
 def delete_job(source: Source, id: str, admin_email: str = Depends(require_editor)) -> dict[str, bool]:  # noqa: A002
-    """Remove one job for good. `id` is the row's post_uuid in /api/jobs (the url_key for the BizDev sheets).
-    A job still in the feed or the Excel sheet comes back the next time that is imported."""
+    """Remove one BizDev job. `id` is the row's url_key (post_uuid in /api/jobs). A job still in the Excel sheet comes
+    back the next time it is imported. Feed jobs can't be deleted (the next feed run would add them back):
+    they are rejected instead."""
+    if source == "json":
+        raise HTTPException(400, "Feed jobs can't be deleted: reject the job instead.")
     if not repository.delete_job(source, id):
         raise HTTPException(404, "No such job")
     log.info("Deleted by %s from %s: %s", admin_email, source, id)

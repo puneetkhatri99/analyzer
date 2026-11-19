@@ -6,11 +6,11 @@ services:
     plan: free
     buildCommand: cd client && npm ci && npm run build && cd ../server && pip install -r requirements.txt
     # Migrations run before each start (safe to repeat; a failed one stops the deploy, the old one stays live).
-    # --up-to 7: 0001-0007 only add tables and columns (IF NOT EXISTS), so the live data is kept. 0008 drops
-    # canonical_role and old leftovers, so it waits: check Neon, then run `python -m app.cli migrate` by hand
-    # and raise this number when a new migration is added.
+    # --up-to 17: the newest migration. A migration that drops or rewrites data waits: back up Neon, run it by
+    # hand (`python -m app.cli migrate`), then raise this number. Raise it for every new migration.
+    # (0018_clear_ai_usage deletes the old AI cost log: run it by hand, then raise this to 18.)
     # --proxy-headers: Render's proxy passes the visitor's IP, which the sign-in lockout counts by.
-    startCommand: cd server && python -m app.cli migrate --up-to 7 && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    startCommand: cd server && python -m app.cli migrate --up-to 17 && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
@@ -25,3 +25,12 @@ services:
         sync: false   # Axiom ingest token: logs are also sent to Axiom (server/app/core/logs.py)
       - key: AXIOM_DATASET
         value: analyzer
+      # Not set = broken: these have local-only defaults (server/app/core/config.py).
+      - key: SITE_URL
+        sync: false   # the site's public address, e.g. https://ministry-jobs-analyser.onrender.com (links in emails)
+      - key: RESEND_API_KEY
+        sync: false   # sends the daily lead report and visitors' report emails (server/app/leads/)
+      - key: ALERT_FROM_EMAIL
+        sync: false   # sender on a domain verified in Resend, e.g. MinistryHub <reports@ministryhub.org>
+      - key: OPENAI_API_KEY
+        sync: false   # Admin → Add job reads job pages with AI

@@ -24,7 +24,7 @@ def apply_filters(jobs: list[Job], f: dict[str, Any], skip: Iterable[str] = ()) 
     search = (f.get("search") or "").lower()
     min_salary = f.get("min_salary") or 0
     min_size = f.get("min_church_size") or 0
-    exact = [(key, key) for key in ("role", "denomination", "region", "country", "status", "hours")]
+    exact = [(key, key) for key in ("role", "denomination", "region", "country", "hours")]
 
     def keep(d: Job) -> bool:
         if any(f.get(key) and d[field] != f[key] for key, field in exact):

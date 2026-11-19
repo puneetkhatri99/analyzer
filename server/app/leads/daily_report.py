@@ -1,18 +1,19 @@
 """daily-report: email yesterday's new hot leads, and the day's other numbers, to the addresses set in
-Admin → Settings. Sent through Resend; a cron job runs it (DAILY_REPORT_CRON.md).
+Admin → Settings. Sent through Resend, by the API's own timer (start_scheduler) or a cron job (DAILY_REPORT_CRON.md).
 
-  python -m app.cli daily-report                    # sends at 8 AM New York time (9 AM retries), once per day
+  python -m app.cli daily-report                    # from 8 AM New York time: every day not sent yet, once each
   python -m app.cli daily-report --force            # send yesterday's report now
   python -m app.cli daily-report --dry-run          # print it, send nothing
   python -m app.cli daily-report --day 2026-11-16   # a given day, sent now
 
-Cron runs it at 12:00, 13:00 and 14:00 UTC, which always includes 8 AM and 9 AM in New York (daylight or standard
-time). The 8 AM run sends; the 9 AM run sends only if 8 AM's failed; the day is never sent twice. Days are midnight
-to midnight US Eastern, worked out by Postgres, so no timezone package is needed.
+From 8 AM in New York, each check sends the reports not sent yet (oldest first, up to a week back); a failed send is
+retried by the next check, and a day is never sent twice. Days are midnight to midnight US Eastern, worked out by
+Postgres, so no timezone package is needed.
 """
 
 import argparse
 import logging
+import threading
 from datetime import date, timedelta
 from typing import Any
 
@@ -28,7 +29,7 @@ from app.leads import HOT_AT_REPORTS
 log = logging.getLogger("daily_report")
 
 TZ = "America/New_York"
-SEND_HOURS = (8, 9)  # New York time: send at 8, retry at 9 if 8 failed
+SEND_FROM_HOUR = 8  # New York time: yesterday's report goes out from 8 AM, or as soon as the server is awake after
 RESEND_URL = "https://api.resend.com/emails"
 RECIPIENTS = "hot_lead_emails"  # app_settings keys
 SENT_FOR = "daily_report_sent_for"
@@ -113,9 +114,15 @@ def report_data(day: date) -> dict[str, Any]:
 
 
 def _offer(o: dict[str, Any]) -> str:
-    amount, hourly = float(o["amount"]), o.get("unit") == "hour"
-    text = f"${amount:,.2f} an hour" if hourly else f"${amount:,.0f} a year"
-    return f"{text} ({o['verdict'].rstrip('.')})" if o.get("verdict") else text
+    """An offer a lead checked, e.g. "$52,000 a year (in range)". Event details come from the public site unchecked,
+    so anything odd reads as "an offer" rather than breaking the whole email."""
+    try:
+        amount, hourly = float(o["amount"]), o.get("unit") == "hour"
+        text = f"${amount:,.2f} an hour" if hourly else f"${amount:,.0f} a year"
+        verdict = o.get("verdict")
+        return f"{text} ({verdict.rstrip('.')})" if isinstance(verdict, str) and verdict else text
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return "an offer"
 
 
 def render(data: dict[str, Any]) -> tuple[str, str]:
@@ -180,22 +187,8 @@ def register(commands: argparse._SubParsersAction) -> None:
     parser.set_defaults(handler=_run)
 
 
-def _run(args: argparse.Namespace) -> int:
-    script_log("daily_report")
-    today, hour = eastern_now()
-    day = args.day or today - timedelta(days=1)
-    if not (args.force or args.dry_run or args.day):
-        if hour not in SEND_HOURS:
-            log.info("It's %d:00 in New York, outside the 8-9 AM sending window; nothing to send", hour)
-            return 0
-        if get_setting(SENT_FOR) == day.isoformat():
-            log.info("The report for %s was already sent", day)
-            return 0
-    if args.dry_run:
-        subject, text = render(report_data(day))
-        print(f"Subject: {subject}\n\n{text}")
-        return 0
-
+def _send(day: date) -> int:
+    """Send the report for `day` now. 0 = sent, 1 = couldn't (the day stays unsent, so a later run retries)."""
     recipients = get_recipients()
     if not recipients:
         log.error("Not sent: no addresses in Admin → Settings → Daily lead report")
@@ -205,9 +198,75 @@ def _run(args: argparse.Namespace) -> int:
         return 1
     try:
         n = send_report(day)
-    except EmailError as e:  # the day isn't marked sent, so the 9 AM run (or --day) sends it
+    except EmailError as e:  # the day isn't marked sent, so the next check (or --day) sends it
         log.error("Daily report for %s not sent: %s", day, e)
         return 1
-    set_setting(SENT_FOR, day.isoformat(), by="daily-report")
+    sent = get_setting(SENT_FOR)
+    # the marker only moves forward, and never past yesterday: re-sending an old day (--day) or a test of a future
+    # day must not make the catch-up resend a week, or skip days
+    if (sent is None or day.isoformat() > sent) and day < eastern_now()[0]:
+        set_setting(SENT_FOR, day.isoformat(), by="daily-report")
     log.info("Daily report for %s sent to %d address(es): %d new hot lead(s)", day, len(recipients), n)
     return 0
+
+
+CATCH_UP_DAYS = 7  # a server asleep for longer than this sends only the last week's reports
+
+
+def send_if_due() -> int:
+    """From 8 AM in New York: every report not sent yet, oldest first, up to yesterday. A day missed while the server
+    was asleep (or Resend was down) is sent late, not lost; at most CATCH_UP_DAYS back. Used by the cron command and
+    by the API's own timer (start_scheduler)."""
+    today, hour = eastern_now()
+    yesterday = today - timedelta(days=1)
+    if hour < SEND_FROM_HOUR:
+        log.debug("It's %d:00 in New York, before the 8 AM send; nothing to send", hour)
+        return 0
+    sent = get_setting(SENT_FOR)
+    first = yesterday if sent is None else date.fromisoformat(sent) + timedelta(days=1)
+    first = max(first, yesterday - timedelta(days=CATCH_UP_DAYS - 1))
+    if first > yesterday:
+        log.debug("The report for %s was already sent", yesterday)
+        return 0
+    for n in range((yesterday - first).days + 1):
+        if _send(first + timedelta(days=n)):
+            return 1  # stop at the first failure: that day stays unsent and the next check retries it
+    return 0
+
+
+def _run(args: argparse.Namespace) -> int:
+    script_log("daily_report")
+    if args.dry_run:
+        day = args.day or eastern_now()[0] - timedelta(days=1)
+        subject, text = render(report_data(day))
+        print(f"Subject: {subject}\n\n{text}")
+        return 0
+    if args.force or args.day:
+        return _send(args.day or eastern_now()[0] - timedelta(days=1))
+    return send_if_due()
+
+
+# ---- or no cron at all: the API sends it --------------------------------------------------------------------------
+
+CHECK_EVERY = 10 * 60  # seconds
+
+
+def start_scheduler() -> threading.Event:
+    """Check every CHECK_EVERY seconds, inside the API process, whether a report is due. A free Render service asleep
+    at 8 AM sends it once it wakes (an uptime pinger keeps it awake and on time). Set the returned event to stop.
+    shortcut: one timer per server process; with several instances two could send the same day at the same moment,
+    move to the cron command (DAILY_REPORT_CRON.md) before scaling out."""
+    stop = threading.Event()
+
+    def loop() -> None:
+        while True:  # check at once: a free Render service woken late may sleep again before the first interval
+            try:
+                send_if_due()
+            except Exception:  # a database hiccup mustn't end the timer for good
+                log.exception("Daily report check failed")
+            if stop.wait(CHECK_EVERY):
+                return
+
+    threading.Thread(target=loop, name="daily-report", daemon=True).start()
+    log.info("Daily lead report: sent once a day at 8 AM New York time (checked every %d min)", CHECK_EVERY // 60)
+    return stop

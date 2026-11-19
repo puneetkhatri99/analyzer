@@ -2,8 +2,7 @@ import React, { useEffect, useState } from "react";
 import { fetchLeadHistory } from "@/api/admin.js";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { longDate } from "@/lib/format.js";
-import { when } from "../costs/costFormat.js";
+import { longDate, when } from "@/lib/format.js";
 import { describe } from "./leadEvents.js";
 import HotBadge from "./HotBadge.jsx";
 

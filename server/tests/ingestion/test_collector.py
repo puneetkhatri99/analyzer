@@ -90,3 +90,17 @@ def test_parse_page_reads_who_where_when():
         "US",
         "2026-11-02",
     )
+
+
+def test_feed_jobs_are_known_by_page_or_full_address():
+    from app.ingestion.collector.run import feed_known
+    from app.shared.web import url_key, with_scheme
+
+    known = feed_known(["boards.example.org/jobs/42", "https://ats.example.com/view?id=1", "ats.example.com/view?id=2"])
+
+    def seen(url):  # the collector's own test
+        return url_key(url) in known or with_scheme(url).strip().lower() in known
+
+    assert seen("https://boards.example.org/jobs/42/")  # one job per page: matched by its page address
+    assert seen("https://ats.example.com/view?id=2")  # a shared page: matched by the full address...
+    assert not seen("https://ats.example.com/view?id=3")  # ...so a new job on it is still new

@@ -1,6 +1,6 @@
 """Reading and writing jobs across the three sources.
 
-json        the church jobs JSON feed (postings + companies + latest snapshot + latest page check)
+json        the church jobs JSON feed (postings + companies)
 churches    BizDev churches sheet, plus jobs added by admins and the collector (church_jobs)
 nonprofits  BizDev nonprofits sheet (nonprofit_jobs)
 """
@@ -9,6 +9,7 @@ import decimal
 from typing import Any, Literal
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from app.core.db import get_conn
 from app.jobs.roles import bucket_role
@@ -25,37 +26,26 @@ COLUMNS = [
     "post_uuid", "job_name", "department", "hours", "seniority", "remote",
     "board_source", "post_url", "city", "region", "country", "company_name",
     "denomination", "church_size", "salary_min", "salary_max", "salary_period",
-    "first_indexed", "pull_date", "check_status", "last_live_at", "expired_at", "origin", "added_at",
-    "church_size_source",
+    "first_indexed", "pull_date", "origin", "added_at", "church_size_source", "reviewed",
 ]  # fmt: skip
 
-# Latest check of the job's URL (job_pages.check) -> what the dashboard shows.
-# unknown / blocked / error / never checked all mean the same to a reader: not verified.
-STATUS = {"ok": "open", "expired": "expired"}
-
+# reviewed: the feed's AI review (or an admin) has judged the posting in scope; the public report waits for it.
 _FEED_SQL = """
     SELECT p.post_uuid, p.job_name_raw, p.department, p.hours,
            p.seniority, p.remote, p.board_source, p.post_url, p.city, p.region, p.country,
            c.company_name, c.denomination, c.church_size,
-           s.salary_min, s.salary_max, s.salary_period,
-           p.first_indexed, s.pull_date, k.check_status, k.last_live_at, k.expired_at, 'feed', p.created_at, NULL
+           p.salary_min, p.salary_max, p.salary_period,
+           p.first_indexed, p.pull_date, 'feed', p.created_at, c.church_size_url, p.scope_checked_at IS NOT NULL
     FROM public.postings p
     LEFT JOIN public.companies c USING (company_uuid)
-    LEFT JOIN public.posting_checks k USING (post_uuid)
-    LEFT JOIN LATERAL (
-        SELECT * FROM public.posting_snapshots ps
-        WHERE ps.post_uuid = p.post_uuid
-        ORDER BY ps.pull_date DESC
-        LIMIT 1
-    ) s ON true
 """
 
 # The BizDev tables mapped onto the feed's columns. Contact names and emails are never selected.
 _BIZDEV_SQL = """
     SELECT url_key, job_title, NULL, hours, NULL, remote, split_part(url_key, '/', 1), job_url,
-           city, state, 'US', org_name, denomination, church_size,
+           city, state, 'United States', org_name, denomination, church_size,
            salary_min, salary_max, salary_period, date_posted, fetched_at::date,
-           fetch_status, last_live_at, expired_at, added_via, imported_at, church_size_source
+           added_via, imported_at, church_size_source, true
     FROM public.{table}
 """
 
@@ -75,7 +65,7 @@ def _json_value(v: Any) -> Any:
 
 
 def load_jobs(source: Source = "json") -> list[dict[str, Any]]:
-    """Every posting of one source as a flat dict, plus derived role, status and annual pay.
+    """Every posting of one source as a flat dict, plus derived role and annual pay.
 
     Re-queried per request: at a few thousand rows this takes a few ms, so there's no
     cache to invalidate when the pipeline re-runs.
@@ -87,7 +77,6 @@ def load_jobs(source: Source = "json") -> list[dict[str, Any]]:
     for row in rows:
         d = {c: _json_value(v) for c, v in zip(COLUMNS, row, strict=True)}
         d["role"] = bucket_role(d["job_name"])
-        d["status"] = STATUS.get(d.pop("check_status"), "unverified")
         lo, hi, period = d["salary_min"], d["salary_max"], d["salary_period"]
         annual = None
         if lo is not None and hi is not None:
@@ -113,21 +102,10 @@ def source_counts() -> list[dict[str, Any]]:
     out = []
     with get_conn() as conn:
         for key, s in SOURCES.items():
-            postings, paid, fetched, open_, expired = conn.execute(
-                "SELECT count(*), count(salary_min), count(pull_date), count(*) FILTER (WHERE check_status = 'ok'),"
-                f" count(*) FILTER (WHERE check_status = 'expired') FROM ({s['sql']}) j({', '.join(COLUMNS)})"
+            postings, paid, fetched = conn.execute(
+                f"SELECT count(*), count(salary_min), count(pull_date) FROM ({s['sql']}) j({', '.join(COLUMNS)})"
             ).fetchone()
-            out.append(
-                {
-                    "key": key,
-                    "label": s["label"],
-                    "postings": postings,
-                    "paid": paid,
-                    "fetched": fetched,
-                    "open": open_,
-                    "expired": expired,
-                }
-            )
+            out.append({"key": key, "label": s["label"], "postings": postings, "paid": paid, "fetched": fetched})
     return out
 
 
@@ -147,25 +125,106 @@ def save_admin_job(conn: psycopg.Connection, source: BizdevSource, row: dict[str
     updates = ", ".join(f"{f} = coalesce(EXCLUDED.{f}, t.{f})" for f in ADMIN_JOB_FIELDS)
     conn.execute(
         f"""INSERT INTO public.{BIZDEV_TABLES[source]} AS t
-                (url_key, job_url, {cols}, sheets, fetch_status, fetched_at, last_live_at, added_via, added_by)
-            VALUES (%(url_key)s, %(job_url)s, {values}, ARRAY['Added by admin'], 'ok', now(), now(),
+                (url_key, job_url, {cols}, sheets, fetch_status, fetched_at, added_via, added_by)
+            VALUES (%(url_key)s, %(job_url)s, {values}, ARRAY['Added by admin'], 'ok', now(),
                     %(added_via)s, %(added_by)s)
             ON CONFLICT (url_key) DO UPDATE SET {updates},
-                fetch_status = 'ok', fetched_at = now(), last_live_at = now(),
+                fetch_status = 'ok', fetched_at = now(),
                 sheets = CASE WHEN 'Added by admin' = ANY(t.sheets) THEN t.sheets
                               ELSE array_append(t.sheets, 'Added by admin') END""",
         row,
     )
 
 
-def delete_job(source: Source, job_id: str) -> bool:
-    """Remove one job for good; False when there was no such job."""
+# ---- rejected feed postings (out of scope): kept whole in rejected_postings, skipped by the daily feed ---------------
+
+# A posting rejected before and somehow back in the job tables is rejected again: the newer copy replaces the old.
+_REJECT = """
+    INSERT INTO public.rejected_postings
+        (post_uuid, post_url, job_title, company_uuid, reason, rejected_by, posting)
+    SELECT p.post_uuid, lower(trim(p.post_url)), p.job_name_raw, p.company_uuid, %(reason)s, %(by)s, to_jsonb(p)
+    FROM public.postings p WHERE p.post_uuid = %(id)s
+    ON CONFLICT (post_uuid) DO UPDATE SET post_url = EXCLUDED.post_url, job_title = EXCLUDED.job_title,
+        company_uuid = EXCLUDED.company_uuid, reason = EXCLUDED.reason, rejected_by = EXCLUDED.rejected_by,
+        rejected_at = now(), posting = EXCLUDED.posting
+    RETURNING 1"""
+
+
+def reject_posting(conn: psycopg.Connection, post_uuid: str, reason: str, by: str) -> bool:
+    """Move a feed posting out of the job tables into rejected_postings (inside the caller's transaction).
+    False when there is no such posting."""
+    if conn.execute(_REJECT, {"id": post_uuid, "reason": reason, "by": by}).fetchone() is None:
+        return False
+    conn.execute("DELETE FROM public.postings WHERE post_uuid = %s", (post_uuid,))
+    return True
+
+
+def restore_posting(post_uuid: str) -> bool:
+    """Put a rejected posting back exactly as it was, pay included. It stays judged, so the daily job's AI
+    never rejects it again. False when it isn't in rejected_postings."""
     with get_conn() as conn, conn.transaction():
-        if source == "json":
-            conn.execute("DELETE FROM public.posting_checks WHERE post_uuid = %s", (job_id,))
-            conn.execute("DELETE FROM public.posting_snapshots WHERE post_uuid = %s", (job_id,))
-            gone = conn.execute("DELETE FROM public.postings WHERE post_uuid = %s RETURNING 1", (job_id,)).fetchone()
-        else:
-            table = BIZDEV_TABLES[source]
-            gone = conn.execute(f"DELETE FROM public.{table} WHERE url_key = %s RETURNING 1", (job_id,)).fetchone()
+        row = conn.execute(
+            "DELETE FROM public.rejected_postings WHERE post_uuid = %s RETURNING posting", (post_uuid,)
+        ).fetchone()
+        if row is None:
+            return False
+        posting = Jsonb(row[0])
+        conn.execute(
+            """INSERT INTO public.postings SELECT * FROM jsonb_populate_record(NULL::public.postings, %s)
+               ON CONFLICT (post_uuid) DO NOTHING""",
+            (posting,),
+        )
+        conn.execute(
+            "UPDATE public.postings SET scope_checked_at = coalesce(scope_checked_at, now()) WHERE post_uuid = %s",
+            (post_uuid,),
+        )
+    return True
+
+
+def rejected_postings() -> list[dict[str, Any]]:
+    """Every rejected feed posting, newest first, for the admin's Rejected jobs tab. The link is the posting's own URL
+    (r.post_url is lower-cased for matching, and job sites' paths can be case-sensitive), with its https:// added."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT r.post_uuid, r.job_title, c.company_name, r.posting->>'city', r.posting->>'region',
+                      coalesce(r.posting->>'post_url', r.post_url), r.reason, r.rejected_by, r.rejected_at
+               FROM public.rejected_postings r LEFT JOIN public.companies c USING (company_uuid)
+               ORDER BY r.rejected_at DESC, c.company_name, r.job_title"""
+        ).fetchall()
+    keys = [
+        "post_uuid",
+        "job_name",
+        "company_name",
+        "city",
+        "region",
+        "post_url",
+        "reason",
+        "rejected_by",
+        "rejected_at",
+    ]
+    out = [{k: _json_value(v) for k, v in zip(keys, r, strict=True)} for r in rows]
+    for d in out:
+        d["post_url"] = d["post_url"] and with_scheme(d["post_url"])
+    return out
+
+
+def job_contact(source: BizdevSource, job_id: str) -> dict[str, str | None] | None:
+    """The person to contact about one BizDev job (from the sheet), or None when there is no such job. The only place
+    contact details leave the database: the endpoint that calls this is for editors and admins."""
+    with get_conn() as conn:
+        row = conn.execute(
+            f"SELECT contact_first_name, contact_last_name, contact_title, contact_email "
+            f"FROM public.{BIZDEV_TABLES[source]} WHERE url_key = %s",
+            (job_id,),
+        ).fetchone()
+    return None if row is None else dict(zip(("first_name", "last_name", "title", "email"), row, strict=True))
+
+
+def delete_job(source: BizdevSource, job_id: str) -> bool:
+    """Remove one BizDev job; False when there was no such job. (A feed job would come back with the next feed run,
+    so feed jobs are rejected instead: reject_posting.)"""
+    with get_conn() as conn:
+        gone = conn.execute(
+            f"DELETE FROM public.{BIZDEV_TABLES[source]} WHERE url_key = %s RETURNING 1", (job_id,)
+        ).fetchone()
     return gone is not None

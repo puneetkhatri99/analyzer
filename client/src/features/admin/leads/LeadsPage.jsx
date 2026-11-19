@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Download, Flame } from "lucide-react";
+import { Download } from "lucide-react";
 import { fetchLeads } from "@/api/admin.js";
 import SimpleTable from "@/components/SimpleTable.jsx";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { downloadCsv, toCsv } from "@/lib/csv.js";
-import { count, isoDate, longDate } from "@/lib/format.js";
+import { count, isoDate, longDate, when } from "@/lib/format.js";
 import Kpi from "../components/Kpi.jsx";
-import HotBadge, { BookedBadge } from "./HotBadge.jsx";
+import HotBadge, { BookedBadge, EmailBadge } from "./HotBadge.jsx";
 import LeadHistory from "./LeadHistory.jsx";
-import { when } from "../costs/costFormat.js";
+import { ANY, NO_FILTERS, SHOW, SINCE, choices, filterLeads, isFiltered } from "./leadFilters.js";
 
 export const placeName = (v) => (v === "nationwide" ? "Nationwide" : v); // the form's "Anywhere in the US"
 const searched = (l) => [l.role, placeName(l.location), l.attendance].filter(Boolean).join(" · ") || "—";
@@ -28,6 +28,7 @@ const columns = (open) => [
             onClick={() => open(l.email)} aria-label={`${l.name}: open history`}>{l.name}</button>
           {l.hot && <HotBadge />}
           {l.booked && <BookedBadge />}
+          <EmailBadge status={l.report_email} />
         </span>
         <span className="text-xs text-muted-foreground">{l.organization}</span>
       </div>
@@ -46,6 +47,8 @@ const SORTS = {
   reports: ["Most reports", (a, b) => b.reports - a.reports],
 };
 
+const EMAIL_STATUS = { sent: "Sent", failed: "Failed", skipped: "Not sent" };
+
 const CSV_COLUMNS = [
   ["Name", (l) => l.name],
   ["Email", (l) => l.email],
@@ -58,6 +61,7 @@ const CSV_COLUMNS = [
   ["Hot lead", (l) => (l.hot ? "Yes" : "No")],
   ["Hot since", (l) => isoDate(l.hot_at)],
   ["Booked a call", (l) => (l.booked ? "Yes" : "No")],
+  ["Report email", (l) => EMAIL_STATUS[l.report_email] || ""],
   ["Reports viewed", (l) => l.reports],
   ["Actions recorded", (l) => l.events || 0],
 ];
@@ -66,6 +70,18 @@ const TOP = [
   { header: "Name", cell: (r) => placeName(r.name) },
   { header: "Leads", cell: (r) => count(r.leads), right: true, className: "num" },
 ];
+
+// One filter: a labelled select. options: [[value, label], …]
+function Pick({ label, value, onChange, options, className = "w-full sm:w-44" }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className={className} aria-label={label}><SelectValue /></SelectTrigger>
+      <SelectContent>{options.map(([k, text]) => <SelectItem key={k} value={k}>{text}</SelectItem>)}</SelectContent>
+    </Select>
+  );
+}
+
+const labels = (obj) => Object.entries(obj).map(([k, [label]]) => [k, label]);
 
 function TopCard({ title, rows }) {
   return (
@@ -80,18 +96,14 @@ function TopCard({ title, rows }) {
 export default function LeadsPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [query, setQuery] = useState("");
-  const [hotOnly, setHotOnly] = useState(false);
+  const [filters, setFilters] = useState(NO_FILTERS);
   const [sort, setSort] = useState("newest");
   const [open, setOpen] = useState(null); // the email whose history is showing
   useEffect(() => { fetchLeads().then(setData).catch((e) => setError(`Couldn’t load leads (${e.message})`)); }, []);
 
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const all = (data?.leads || []).filter((l) => !hotOnly || l.hot);
-    const found = q ? all.filter((l) => [l.name, l.email, l.organization, l.role, l.location].some((v) => v?.toLowerCase().includes(q))) : all;
-    return [...found].sort(SORTS[sort][1]);
-  }, [data, query, hotOnly, sort]);
+  const shown = useMemo(() => filterLeads(data?.leads || [], filters).sort(SORTS[sort][1]), [data, filters, sort]);
+  const setFilter = (key) => (value) => setFilters((f) => ({ ...f, [key]: value?.target ? value.target.value : value }));
+  const filtered = isFiltered(filters);
 
   if (error) return <p className="form-error" role="alert">{error}</p>;
   if (!data) return <Card aria-busy="true"><Skeleton className="h-5 w-60" /></Card>;
@@ -113,24 +125,28 @@ export default function LeadsPage() {
       <Card>
         <CardHeader>
           <CardTitle>All leads</CardTitle>
-          <CardDescription>{query || hotOnly ? `${count(shown.length)} of ${count(data.leads.length)}` : `${count(data.leads.length)} leads`}</CardDescription>
+          <CardDescription>{filtered ? `${count(shown.length)} of ${count(data.leads.length)}` : `${count(data.leads.length)} leads`}</CardDescription>
           <CardAction className="flex flex-wrap justify-end gap-2">
             <Input type="search" aria-label="Search leads" placeholder="Search name, email, organization…" className="w-64"
-              value={query} onChange={(e) => setQuery(e.target.value)} />
-            <Select value={sort} onValueChange={setSort}>
-              <SelectTrigger className="w-40" aria-label="Sort leads"><SelectValue /></SelectTrigger>
-              <SelectContent>{Object.entries(SORTS).map(([k, [label]]) => <SelectItem key={k} value={k}>{label}</SelectItem>)}</SelectContent>
-            </Select>
-            <Button variant={hotOnly ? "default" : "outline"} aria-pressed={hotOnly} onClick={() => setHotOnly(!hotOnly)}>
-              <Flame aria-hidden="true" />Hot leads only
-            </Button>
+              value={filters.query} onChange={setFilter("query")} />
+            <Pick label="Sort leads" value={sort} onChange={setSort} options={labels(SORTS)} className="w-40" />
             <Button onClick={exportCsv} disabled={!shown.length}>
               <Download aria-hidden="true" />Export CSV
             </Button>
           </CardAction>
         </CardHeader>
+        <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Filter leads">
+          <Pick label="Show leads" value={filters.show} onChange={setFilter("show")} options={labels(SHOW)} />
+          <Pick label="Role searched" value={filters.role} onChange={setFilter("role")}
+            options={[[ANY, "Any role"], ...choices(data.leads, "role").map((v) => [v, v])]} className="w-full sm:w-52" />
+          <Pick label="Location searched" value={filters.location} onChange={setFilter("location")}
+            options={[[ANY, "Any location"], ...choices(data.leads, "location").map((v) => [v, placeName(v)])]} />
+          <Pick label="Signed up" value={filters.since} onChange={setFilter("since")}
+            options={labels(SINCE).map(([k, t]) => [k, k === ANY ? "Signed up any time" : `Signed up: ${t.toLowerCase()}`])} className="w-full sm:w-52" />
+          {filtered && <Button variant="link" onClick={() => setFilters(NO_FILTERS)}>Clear filters</Button>}
+        </div>
         <SimpleTable columns={columns(setOpen)} rows={shown} rowKey={(l) => l.email}
-          empty={query || hotOnly ? "No leads match." : "No one has signed up yet."} />
+          empty={filtered ? "No leads match these filters." : "No one has signed up yet."} />
       </Card>
       <LeadHistory email={open} onClose={() => setOpen(null)} />
     </>

@@ -1,6 +1,6 @@
 from app.core.db import get_conn
 from app.job_pages.check import UPDATE_BIZDEV
-from app.job_pages.parser import parse_page, salary_from_text
+from app.job_pages.parser import denomination_in, parse_page, salary_from_text
 
 
 def test_salary_from_text():
@@ -30,8 +30,19 @@ def test_church_size_and_label():
     assert parse_page("<p>Our sidebar mentions Presbyterian news</p>", "Grace Church")["denomination"] is None
 
 
-def test_expiry_tracking_sql():
-    """A job seen open, then closed, keeps both times; a later closed check doesn't move expired_at."""
+def test_dioceses_and_parishes_of_other_churches_are_not_catholic():
+    assert denomination_in("Episcopal Diocese of Texas") == "Episcopal"
+    assert denomination_in("Anglican Diocese of the Rocky Mountains") == "Episcopal"
+    assert denomination_in("St. Paul Lutheran Parish") == "Lutheran"
+    assert denomination_in("Grace Methodist Parish") == "Methodist"
+    assert denomination_in("United Church of Christ") == "United Church of Christ"
+    assert denomination_in("Lakeside Church of Christ") == "Church of Christ"
+    assert denomination_in("Diocese of Tucson") == denomination_in("St. Timothy Roman Catholic Parish") == "Catholic"
+    assert denomination_in("Acadia Parish Schools") is None  # a Louisiana parish is a county
+
+
+def test_reread_keeps_details_found_earlier():
+    """A page read with pay, then read again once closed (no details), keeps the pay."""
     with get_conn() as conn:
         conn.execute("CREATE TEMP TABLE t_jobs (LIKE public.church_jobs INCLUDING DEFAULTS)")
         conn.execute("INSERT INTO t_jobs (url_key, job_url) VALUES ('k', 'u')")
@@ -48,8 +59,5 @@ def test_expiry_tracking_sql():
         }
         conn.execute(sql, {**base, "status": "ok", "lo": 50000, "hi": 60000, "period": "year"})
         conn.execute(sql, {**base, "status": "expired"})
-        first = conn.execute("SELECT last_live_at, expired_at, salary_min FROM t_jobs").fetchone()
-        conn.execute(sql, {**base, "status": "expired"})
-        again = conn.execute("SELECT last_live_at, expired_at, salary_min, fetch_status FROM t_jobs").fetchone()
-    assert first[0] and first[1] and first[2] == 50000  # pay kept after the page closed
-    assert again[:3] == first and again[3] == "expired"
+        row = conn.execute("SELECT salary_min, fetch_status FROM t_jobs").fetchone()
+    assert row == (50000, "expired")

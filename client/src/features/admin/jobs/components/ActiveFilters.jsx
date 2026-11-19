@@ -2,8 +2,7 @@ import React from "react";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { count, money } from "@/lib/format.js";
-import { ORIGIN, STATUS } from "./filterLabels.js";
+import { ORIGIN_FILTERS, count, money } from "@/lib/format.js";
 
 function describe(key, value) {
   switch (key) {
@@ -13,8 +12,7 @@ function describe(key, value) {
     case "denomination": return ["Denomination", value];
     case "min_church_size": return ["Church size", `${count(value)}+`];
     case "hours": return ["Type", value];
-    case "status": return ["Status", STATUS[value]];
-    case "origin": return ["Added via", ORIGIN[value]];
+    case "origin": return ["Added via", ORIGIN_FILTERS[value]];
     case "country": return ["Country", value];
     case "remote": return [value === "true" ? "Remote only" : "On-site only", null];
     case "min_salary": return ["Pay", `${money(value)}+`];

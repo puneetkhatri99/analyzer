@@ -27,9 +27,20 @@ class JobExtraction(BaseModel):
 
 class ChurchFacts(BaseModel):
     church_size: int | None  # average weekly attendance, only if a source states it
+    year: int | None  # the year the attendance figure is for, when the source says
     denomination: str | None
     source_url: str | None  # page the attendance figure comes from
-    evidence: str | None  # short quote from that page
+    evidence: str | None  # short quote from that page, containing the number
+
+
+class PostingReview(BaseModel):
+    employer_type: Literal["church", "christian_school", "christian_nonprofit", "other"]
+    listed_employer_is_hiring: bool  # false when the feed's "Employer" is a go-between (search firm, network)
+    keep: bool
+    exclude_reason: str | None  # one short sentence when keep is false
+    salary_min: float | None
+    salary_max: float | None
+    salary_period: Literal["year", "hour"] | None
 
 
 class ExtractRequest(BaseModel):

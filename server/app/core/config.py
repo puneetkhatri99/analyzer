@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # Sign-ups from these email domains (the team testing the site) aren't stored as leads. Comma-separated.
     ignored_lead_domains: str = "ministryhub.org"
 
+    # The daily feed job (app/ingestion/daily_feed.py). The feed link is saved by an admin in Admin → Settings;
+    # FEED_URL is only the fallback. FEED_HOUR_UTC: the job runs once a day after this hour.
+    # ENRICH_MAX_PER_RUN: churches the AI searches the web for per run (each search costs about a cent).
+    feed_url: str | None = None
+    feed_hour_utc: int = 6
+    enrich_max_per_run: int = 50
+
     # Overrides the default log level (API: INFO, scripts: DEBUG), e.g. LOG_LEVEL=DEBUG to look into a problem.
     log_level: str | None = None
 

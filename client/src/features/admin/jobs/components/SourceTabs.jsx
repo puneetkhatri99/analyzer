@@ -18,7 +18,6 @@ export default function SourceTabs({ sources, value, onChange }) {
             <span className="source-meta num">
               {count(s.postings)} postings · {count(s.paid)} with pay
               {s.key !== "json" && s.fetched < s.postings && <> · {count(s.fetched)} pages read</>}
-              {s.expired > 0 && <> · {count(s.expired)} expired</>}
             </span>
           )}
           <span className="source-note">{NOTES[s.key]}</span>

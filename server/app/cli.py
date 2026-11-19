@@ -5,12 +5,12 @@ import sys
 
 from app.auth import commands as auth_commands
 from app.core import migrations
-from app.ingestion import bizdev, feed, push_data
+from app.ingestion import bizdev, bizdev_sync, daily_feed, push_data
 from app.ingestion.collector import run as collector
 from app.job_pages import check
 from app.leads import daily_report
 
-COMMANDS = (migrations, auth_commands, feed, bizdev, check, collector, push_data, daily_report)
+COMMANDS = (migrations, auth_commands, bizdev, check, collector, push_data, daily_report, daily_feed, bizdev_sync)
 
 
 def main(argv: list[str] | None = None) -> int:

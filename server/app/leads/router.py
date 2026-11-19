@@ -6,7 +6,7 @@ import logging
 from datetime import timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from app.auth.dependencies import require_admin
 from app.core.config import get_settings
 from app.core.db import get_conn
-from app.leads import HOT_AT_REPORTS, daily_report
+from app.leads import HOT_AT_REPORTS, daily_report, report_email
 from app.shared.email import is_valid_email, normalize_email
 
 log = logging.getLogger("admin")
@@ -31,11 +31,13 @@ class Lead(BaseModel):
     location: str | None = Field(default=None, max_length=200)
     attendance: str | None = Field(default=None, max_length=100)
     shared: bool = False  # signed up to open a report someone shared with them
+    email_report: bool = False  # "Email me this report" was switched on
+    report: str = Field(default="", max_length=2000)  # the report's query string: role=…&state=…
 
 
 # What the public site records (features/site/lead.js `track`); "signup" is recorded here, on the server.
-# share_link / share_email: older rows only; those clicks are now plain "click" events.
-EventType = Literal["report", "offer", "share_link", "share_email", "download", "cta", "click"]
+# (Older rows may also hold share_link / share_email: those clicks are now plain "click" events.)
+EventType = Literal["report", "offer", "download", "cta", "click"]
 MERGE_REPORTS_WITHIN = "30 seconds"  # a report right after another replaces it: one search, not a burst of rows
 MAX_DETAILS = 2000  # characters of JSON; an event's details are a few filters or one amount
 
@@ -53,12 +55,14 @@ def is_internal(email: str) -> bool:
 
 
 @router.post("")
-def save_lead(lead: Lead) -> dict[str, bool]:
+def save_lead(lead: Lead, tasks: BackgroundTasks) -> dict[str, bool]:
     """A returning email updates its row instead of adding one. Internal emails get the report but aren't stored,
     so none of their activity is either (events are kept only for stored leads)."""
     email = normalize_email(lead.email)
     if not is_valid_email(email):
         raise HTTPException(422, "Please enter a valid email address.")
+    if lead.email_report:
+        tasks.add_task(report_email.send, email, lead.name.strip(), lead.report)  # runs after this reply
     if is_internal(email):
         return {"ok": True}
     with get_conn() as conn:
@@ -136,11 +140,14 @@ def leads_report() -> dict[str, Any]:
         leads = cur.execute(
             """SELECT l.email, l.name, l.organization, l.role, l.location, l.attendance, l.created_at, l.last_seen_at,
                       e.events, e.last_active, coalesce(e.reports, 0) AS reports, l.hot_at IS NOT NULL AS hot,
-                      l.hot_at, coalesce(e.booked, false) AS booked
+                      l.hot_at, coalesce(e.booked, false) AS booked, e.report_email
                FROM public.leads l
                LEFT JOIN (SELECT email, count(*) AS events, max(created_at) AS last_active,
                                  count(*) FILTER (WHERE type = 'report') AS reports,
-                                 bool_or(type = 'cta' AND details->>'url' LIKE %s) AS booked
+                                 bool_or(type = 'cta' AND details->>'url' LIKE %s) AS booked,
+                                 -- the latest report email's outcome: sent / failed / skipped, null if never asked
+                                 (array_agg(coalesce(details->>'status', 'sent') ORDER BY created_at DESC)
+                                    FILTER (WHERE type = 'report_email'))[1] AS report_email
                           FROM public.lead_events GROUP BY email) e USING (email)
                ORDER BY l.created_at DESC""",
             (f"%{BOOKING_HOST}%",),

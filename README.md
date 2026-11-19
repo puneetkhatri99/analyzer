@@ -7,11 +7,12 @@ location, denomination and church size.
 
 ```
 analyser/
-├── client/                 React dashboard (Vite, Chart.js, Tabulator)
+├── client/                 React (Vite, Tailwind, shadcn/ui): the public site and the admin area
 │   └── src/
-│       ├── App.jsx         filter state, data fetching, layout
-│       ├── api.js          calls to the API
-│       └── components/     FilterBar, StatTiles, Charts, JobsTable
+│       ├── features/       landing, report, admin (jobs, rejected, leads, costs, settings, users, add-job)
+│       ├── api/            calls to the API
+│       ├── components/ui/  shared shadcn/ui components
+│       └── lib/            formatting, CSV and other helpers
 ├── server/
 │   ├── app/                one folder per feature (below), plus core/ and shared/
 │   │   ├── main.py         the FastAPI app: middleware, routers, the built dashboard
@@ -25,16 +26,14 @@ analyser/
 │   │   ├── extraction/     admin "add a job from any URL" with OpenAI, and saving it
 │   │   ├── ai_usage/       AI call costs and the costs page
 │   │   ├── job_pages/      reading job pages (pay, type, size, denomination) and check-jobs
-│   │   └── ingestion/      ingest-feed, import-bizdev, push-data, collector/ (collect-jobs)
+│   │   └── ingestion/      daily-feed (+ AI review), import-bizdev, bizdev-sync, push-data, collector/ (collect-jobs)
 │   ├── migrations/         numbered SQL files: the database schema, applied by `migrate`
-│   ├── tests/              one folder per feature
-│   └── data/raw/           the source JSON feed
-├── phase/                  one document per project phase, with status
+│   └── tests/              one folder per feature
 └── render.yaml             deploys the API and the dashboard on Render
 ```
 
-Start with [phase/README.md](phase/README.md) for the roadmap and what each
-phase does.
+[DAILY_FEED.md](DAILY_FEED.md) explains the daily jobs feed and its AI review; [DAILY_REPORT_CRON.md](DAILY_REPORT_CRON.md)
+the daily lead email.
 
 ## Run it locally
 
@@ -46,7 +45,7 @@ You need Python 3.11+, Node 20+, and a Postgres database.
 cp .env.example .env                      # then set DATABASE_URL
 pip install -r requirements-dev.txt       # requirements.txt + pytest and ruff
 python -m app.cli migrate                 # creates or updates every table
-python -m app.cli ingest-feed data/raw/church_jobs_feed_02.10.26.json
+python -m app.cli daily-feed --force      # loads the jobs feed (FEED_URL, or the link saved in Admin → Settings)
 ```
 
 **Optional: the BizDev Excel sources** (from `server/`; the spreadsheets live in the git-ignored `data/` folder because they hold contact details)
@@ -58,6 +57,27 @@ python -m app.cli check-jobs churches     # reads each job page for pay, job typ
 python -m app.cli check-jobs nonprofits   # add --retry to re-try blocked/failed pages
 ```
 
+**Weekly sheet sync.** Instead of importing by hand, paste the two sheet links in Admin → Settings → BizDev sheets (a Google
+Sheets share link, "anyone with the link can view", or a direct .xlsx link). Once a week the server downloads both and
+adds the jobs it doesn't have (matched by job URL; saved values are never erased). `python -m app.cli bizdev-sync --force`
+runs it now. It runs on the API's own timer (production only, from `FEED_HOUR_UTC` on the first check of each week), so
+a sleeping free Render service catches up when it wakes. A failed download retries the next day and emails the
+daily-report addresses. Code: `server/app/ingestion/bizdev_sync.py`.
+
+**AI fill-in for the BizDev jobs** (`bizdev_enrich.py`, `python -m app.cli bizdev-enrich [--limit N]`). The sheets hold no pay,
+church size or denomination, and most job links (SimplyHired) block page reads, so once a day, after the sync, up to
+`ENRICH_MAX_PER_RUN` (50) per sheet are filled in: the denomination from the employer's name (free); church size and
+denomination by web search, once per employer (church sheet: every employer; nonprofit sheet: church-like names only);
+and pay by web search for jobs whose page couldn't be read and that were posted in the last 180 days. Each step is stamped
+(`employer_checked_at`, `pay_checked_at`), so nothing is paid for twice; pay it finds is marked `salary_source = 'ai'`.
+Costs show under Admin → AI costs as `bizdev-…` runs. Without `OPENAI_API_KEY` only the free step runs.
+
+**Monthly AI limit** (Admin → AI costs → Monthly AI limit). An admin sets the most the AI may cost in a month (US dollars,
+UTC calendar month, estimated from `ai_usage`). At the limit, all four places that call OpenAI stop (the daily JSON review,
+the church lookup, the BizDev pay search, and "Add a job", which answers 429) until the next month or until the limit is
+raised or removed; the daily-report addresses are emailed when a run is paused. No limit is set until an admin sets one.
+Calls already running can overshoot by a few cents. Code: `ensure_budget()` in `server/app/ai_usage/service.py`.
+
 **Collecting new church jobs automatically** (from `server/`). Finds new US church jobs on the sites that allow it and adds
 them to the BizDev churches tab as "Auto-collected". [COLLECTOR_HOW_IT_WORKS.md](COLLECTOR_HOW_IT_WORKS.md) explains how; [COLLECTOR_GAPS.md](COLLECTOR_GAPS.md) lists what it leaves out. Safe to run daily:
 
@@ -68,23 +88,13 @@ python -m app.cli collect-jobs --source sbc --limit 50
 # every run logs to server/logs/ and ends with a PROBLEMS list (site changed / blocked / site down)
 ```
 
-**Tracking expired jobs** (from `server/`). Each check records whether a job's page is still open:
-
-```bash
-python -m app.cli check-jobs json                 # first check of the JSON feed's job URLs
-python -m app.cli check-jobs churches --recheck   # re-check every job not yet expired; run weekly
-python -m app.cli check-jobs nonprofits --recheck
-python -m app.cli check-jobs json --recheck
-```
-
-A job's status is `ok` (open), `expired` (404 / "position filled" / Workday says it's closed), `unknown`
-(a JavaScript-only page such as Paycom, ADP or HRM Direct, so open or closed can't be told), `blocked` or
-`error`. `last_live_at` is the latest check that found it open; `expired_at` is the first that found it
-closed, so the job closed between the two. Feed results live in `posting_checks`; the BizDev tables carry
-the same columns. The dashboard's **More filters → Status** and the table's Status column show them.
+Jobs aren't tracked as open or closed: a page check on the feed's jobs that had left the feed found about a quarter
+still open, and JavaScript-only job sites (ClearCompany, ADP, Paycom...) can't be read at all, so the status wasn't
+reliable. Migration 0015 removed the old check results (`posting_checks` and the BizDev `last_live_at` /
+`expired_at` columns).
 
 The dashboard shows each source on its own tab (`?source=json|churches|nonprofits`): the feed tables,
-`church_jobs` and `nonprofit_jobs`. Contact names and emails stay in the database; the API never returns them.
+`church_jobs` and `nonprofit_jobs`. Contact names and emails stay in the database. The job lists and the public report never carry them; only a signed-in editor or admin sees a job's contact, in its detail dialog (`GET /api/admin/jobs/contact`, logged).
 
 **Database changes** go in a new numbered file in `server/migrations/` (`0009_what_it_does.sql`), never by editing
 one that has run: `migrate` refuses a file whose text changed after it was applied. Each file runs in its own
@@ -114,7 +124,7 @@ Everything logs to files in `server/logs/` (git-ignored), and to the screen. Set
 | Log file | What's in it |
 |---|---|
 | `api.log` (new file each midnight, 30 days kept) | Every request: method, path, status, time, IP. Every error with its traceback. Admin actions: sign-ins and failed sign-ins, URLs extracted and what was found, AI calls and their cost, church size lookups, jobs saved and by whom |
-| `<script>-<date>-<time>.log`, one per run | Every command (`collect_jobs`, `check_jobs`, `ingest`, `import_bizdev`, `push_data`, `create_admin`, `migrate`): settings, every page fetched (status, size, time), every row's outcome, the summary, and a crash's traceback |
+| `<script>-<date>-<time>.log`, one per run | Every command (`daily_feed`, `daily_report`, `collect_jobs`, `check_jobs`, `import_bizdev`, `push_data`, `create_admin`, `migrate`): settings, every page fetched (status, size, time), every row's outcome, the summary, and a crash's traceback |
 
 The screen shows the main lines; the files hold every detail. Passwords, session tokens, the database password and
 the spreadsheets' contact names and emails are never logged. On Render the disk is wiped on each deploy, so with
@@ -139,6 +149,10 @@ on Render to look into a problem without changing code.
 (structured job data first, then the visible text; Workday through its job API; blocked or JavaScript-only
 pages through OpenAI web search), an OpenAI model extracts the job, and the admin reviews it and saves it
 to the churches or nonprofits dataset. Pages that aren't a single job posting are reported as such.
+
+**Settings** and **AI costs** (admins only) open from the profile menu, the round button at the top right, not from the tabs.
+Settings opens on a plain-words summary of what runs by itself (the daily church jobs download, the weekly Excel sheets, the
+AI's spending, the daily email) and marks anything that needs a person; each area then has its own section.
 
 Admin accounts live in the database (`admin_users`, scrypt-hashed passwords); sessions live in
 `admin_sessions`, so signing out ends a session immediately and no signing secret is needed. Create an admin,

@@ -107,7 +107,7 @@ One new row in `church_jobs` per job. The listing's values come first; the job p
 | `hours`, `remote`, `church_size` | The page (`hours` from the listing when it has it) |
 | `denomination` | The board's denomination (SBC, EFCA), else the page, else the church's name |
 | `fetch_status` | `ok` (open), or `unknown` when the page needs a browser to show the job |
-| `last_live_at`, `fetched_at` | Now (`last_live_at` only when `ok`) |
+| `fetched_at` | Now |
 | `added_via` | `collector` |
 | `sheets` | `{Auto-collected}` |
 
@@ -116,5 +116,7 @@ admin-added jobs are never overwritten.
 
 **On the dashboard** the jobs appear on the **BizDev churches** tab. "Added via" shows **Auto-collected**, and you can filter
 by it under **More filters → Added via**. The role (Pastor, Worship/Music…) and the yearly pay are worked out from the title and
-salary when the page loads, like every other job. To mark auto-collected jobs that close, run the existing re-check:
-`python -m app.cli check-jobs churches --recheck`.
+salary when the page loads, like every other job. Jobs aren't tracked as open or closed (see the README).
+
+**Jobs already known are skipped:** those in `church_jobs`, and the feed's jobs, kept or rejected, so a feed job is never
+saved a second time here.

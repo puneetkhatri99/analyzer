@@ -20,7 +20,8 @@ import json
 import logging
 import threading
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -37,7 +38,7 @@ from app.job_pages.fetcher import HOST_DELAY, fetch_one
 from app.job_pages.parser import denomination_in
 from app.shared.dates import to_date
 from app.shared.geo import is_us, split_place, state_code
-from app.shared.web import url_key
+from app.shared.web import url_key, with_scheme
 
 SOURCES = {
     "sbc": sbc,
@@ -52,10 +53,10 @@ log = logging.getLogger("collect_jobs")
 
 INSERT = """INSERT INTO public.church_jobs (url_key, job_url, job_title, org_name, org_website, city, state,
         date_posted, salary_min, salary_max, salary_period, hours, remote, denomination, church_size,
-        sheets, fetch_status, fetched_at, last_live_at, added_via)
+        sheets, fetch_status, fetched_at, added_via)
     VALUES (%(key)s, %(url)s, %(title)s, %(org)s, %(org_website)s, %(city)s, %(state)s, %(date_posted)s,
         %(lo)s, %(hi)s, %(period)s, %(hours)s, %(remote)s, %(denomination)s, %(church_size)s,
-        ARRAY['Auto-collected'], %(status)s, now(), CASE WHEN %(status)s = 'ok' THEN now() END, 'collector')
+        ARRAY['Auto-collected'], %(status)s, now(), 'collector')
     ON CONFLICT (url_key) DO NOTHING"""
 
 # outcome of reading one job -> (stats key, words for the log)
@@ -136,6 +137,14 @@ def register(commands: argparse._SubParsersAction) -> None:
     parser.set_defaults(handler=_run)
 
 
+def feed_known(feed_urls: Iterable[str]) -> set[str]:
+    """What marks a job as already in the feed: its page address (url_key), or its full address when several feed jobs
+    share one page and differ only in ?id=... (ClearCompany, ADP, Paycor), so new jobs on those pages are still new."""
+    urls = [with_scheme(u).strip().lower() for u in feed_urls]
+    shared = Counter(url_key(u) for u in urls)
+    return {k for k, n in shared.items() if n == 1} | set(urls)
+
+
 def _list_new(
     s: CollectorSession, name: str, st: Stats, since: date, days: int, known: set[str], report: dict[str, Any]
 ) -> list[Job]:
@@ -153,7 +162,7 @@ def _list_new(
         elif not is_us(job.get("state"), job.get("country")):
             st["not_us"] += 1
             verdict = "outside the US"
-        elif (key := url_key(job["url"])) in known:
+        elif (key := url_key(job["url"])) in known or with_scheme(job["url"]).strip().lower() in known:
             st["known"] += 1
             verdict = "already saved"
         else:
@@ -297,11 +306,19 @@ def _run(args: argparse.Namespace) -> int:
     try:
         with get_conn() as conn:
             known = {r[0] for r in conn.execute("SELECT url_key FROM public.church_jobs").fetchall()}
+            # the feed's jobs (and those rejected from it) too: the employers come from the feed, so its jobs would
+            # otherwise be saved a second time here and counted twice in the report
+            feed_urls = conn.execute(
+                "SELECT post_url FROM public.postings WHERE post_url IS NOT NULL "
+                "UNION ALL SELECT posting->>'post_url' FROM public.rejected_postings"
+            ).fetchall()
     except Exception as e:  # any connection or query failure: nothing can run without the database
         log.error("Can't read the database: %s", e)
         log.error(ADVICE["database"])
         return 1
     log.info("church_jobs already holds %s jobs; those are skipped", f"{len(known):,}")
+    known |= feed_known(u for (u,) in feed_urls if u)
+    log.info("%s feed jobs (kept or rejected) are skipped too", f"{len(feed_urls):,}")
 
     s = CollectorSession()
     new: list[Job] = []

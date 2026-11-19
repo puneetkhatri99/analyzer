@@ -64,6 +64,7 @@ def read_rows(path: str) -> dict[str, dict[str, Any]]:
                 old["sheets"].append(ws.title)
             else:
                 rows[key] = {**rec, "url_key": key, "sheets": [ws.title]}
+    wb.close()
     return rows
 
 
@@ -74,20 +75,29 @@ def register(commands: argparse._SubParsersAction) -> None:
     parser.set_defaults(handler=_run)
 
 
-def _run(args: argparse.Namespace) -> int:
-    table = BIZDEV_TABLES[args.kind]
-    script_log("import_bizdev")
-    rows = read_rows(args.xlsx)
-    log.info("Read %d distinct jobs (merged by job URL) from every tab of %s", len(rows), args.xlsx)
+def import_file(kind: str, path: str) -> tuple[int, int]:
+    """Merge one workbook into its table; returns (jobs new to the table, jobs already there that were updated)."""
+    table = BIZDEV_TABLES[kind]
+    rows = read_rows(path)
     fields = ["url_key", *HEADERS, "sheets"]
-    updates = ", ".join(f"{f} = EXCLUDED.{f}" for f in fields if f != "url_key")
+    # A job already saved (by an earlier import, the collector or an admin) keeps values the sheet leaves blank,
+    # and keeps the tabs it was seen on.
+    updates = ", ".join(f"{f} = coalesce(EXCLUDED.{f}, t.{f})" for f in HEADERS)
     sql = (
-        f"INSERT INTO public.{table} ({', '.join(fields)}) VALUES ({', '.join(['%s'] * len(fields))}) "
-        f"ON CONFLICT (url_key) DO UPDATE SET {updates}"
+        f"INSERT INTO public.{table} AS t ({', '.join(fields)}) VALUES ({', '.join(['%s'] * len(fields))}) "
+        f"ON CONFLICT (url_key) DO UPDATE SET {updates}, "
+        "sheets = ARRAY(SELECT DISTINCT unnest(t.sheets || EXCLUDED.sheets) ORDER BY 1)"
     )
     with connect() as conn:
+        before = conn.execute(f"SELECT count(*) FROM public.{table}").fetchone()[0]
         with conn.transaction(), conn.cursor() as cur:
             cur.executemany(sql, [[r[f] for f in fields] for r in rows.values()])
-        total = conn.execute(f"SELECT count(*) FROM public.{table}").fetchone()[0]
-    log.info("%s: upserted %d jobs from %s; table now has %d rows", table, len(rows), args.xlsx, total)
+        after = conn.execute(f"SELECT count(*) FROM public.{table}").fetchone()[0]
+    return after - before, len(rows) - (after - before)
+
+
+def _run(args: argparse.Namespace) -> int:
+    script_log("import_bizdev")
+    new, updated = import_file(args.kind, args.xlsx)
+    log.info("%s: %d new jobs, %d already there (updated) from %s", BIZDEV_TABLES[args.kind], new, updated, args.xlsx)
     return 0

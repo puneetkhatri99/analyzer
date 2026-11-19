@@ -28,15 +28,18 @@ log = logging.getLogger("admin")  # an audit trail of admin actions
 @router.post("/login")
 def login(body: Login, request: Request, response: Response) -> User:
     ip = request.client.host if request.client else "?"
-    if login_limiter.blocked(ip):
-        log.warning("Sign-in refused: %d failed attempts from %s in 15 minutes", login_limiter.recent(ip), ip)
-        raise HTTPException(429, "Too many failed attempts. Try again in 15 minutes.")
     email = normalize_email(body.email)
+    # Counted per IP and per account: the IP comes from X-Forwarded-For, which a caller can fake, the email can't be.
+    keys = (ip, f"email:{email}")
+    if any(login_limiter.blocked(k) for k in keys):
+        log.warning("Sign-in refused for %s from %s: too many failed attempts in 15 minutes", email, ip)
+        raise HTTPException(429, "Too many failed attempts. Try again in 15 minutes.")
     with get_conn() as conn:
         user = repository.find_user(conn, email)
         if not verify_password(body.password, user["password_hash"] if user else DUMMY_HASH) or not user:
-            attempt = login_limiter.recent(ip) + 1
-            login_limiter.fail(ip)
+            attempt = max(login_limiter.recent(k) for k in keys) + 1
+            for k in keys:
+                login_limiter.fail(k)
             log.warning(
                 "Failed sign-in for %s from %s (%s; attempt %d of %d)",
                 email,
@@ -48,7 +51,8 @@ def login(body: Login, request: Request, response: Response) -> User:
             raise HTTPException(401, "Incorrect email or password")
         token = new_session_token()
         repository.create_session(conn, token_hash(token), email)
-    login_limiter.succeed(ip)
+    for k in keys:
+        login_limiter.succeed(k)
     log.info("Signed in: %s from %s", email, ip)
     secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
     response.set_cookie(COOKIE, token, max_age=SESSION_SECONDS, httponly=True, samesite="strict", secure=secure)

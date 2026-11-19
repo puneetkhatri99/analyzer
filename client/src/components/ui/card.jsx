@@ -90,23 +90,9 @@ function CardContent({
   )
 }
 
-function CardFooter({
-  className,
-  ...props
-}) {
-  return (
-    <div
-      data-slot="card-footer"
-      className={cn("mt-auto flex items-center pt-3", className)}
-      {...props}
-    />
-  )
-}
-
 export {
   Card,
   CardHeader,
-  CardFooter,
   CardTitle,
   CardAction,
   CardDescription,

@@ -1,6 +1,7 @@
 // CSV for the postings export. columns: [[header, row => value], …]
 const cell = (v) => {
-  const s = v == null ? "" : String(v);
+  let s = v == null ? "" : String(v);
+  if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`; // Excel would run it as a formula
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

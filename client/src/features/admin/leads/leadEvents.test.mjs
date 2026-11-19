@@ -14,5 +14,8 @@ test("every event type reads as a sentence", () => {
   assert.equal(describe({ type: "offer", details: { amount: 18.5, unit: "hour" } })[0], "Checked an offer of $18.50 an hour");
   assert.equal(describe({ type: "cta", details: { label: "Book a Call", url: "https://x" } })[0], "Went to MinistryHub: “Book a Call”");
   assert.deepEqual(describe({ type: "click", details: { label: "Reset filters", page: "/report" } }), ["Clicked “Reset filters”", "on the report"]);
+  assert.deepEqual(describe({ type: "report_email", details: { report: "Worship/Music · Ohio", status: "failed", reason: "Resend refused the email (403)" } }),
+    ["Report email failed", "Worship/Music · Ohio · Resend refused the email (403)"]);
+  assert.equal(describe({ type: "report_email", details: { report: "x" } })[0], "Got the report by email"); // rows from before statuses
   assert.deepEqual(describe({ type: "something_new" }), ["something_new", ""]); // an unknown type still shows
 });

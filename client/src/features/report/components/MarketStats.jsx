@@ -12,7 +12,7 @@ function Stat({ title, value, children }) {
   );
 }
 
-// Area vs national, time open, and this role's share of openings. `compact` shortens labels for the print view.
+// Area vs national, and this role's share of openings. `compact` shortens labels for the print view.
 export default function MarketStats({ r, roleText, compact }) {
   const v = r.vs_national;
   const share = r.share_percent;
@@ -29,9 +29,6 @@ export default function MarketStats({ r, roleText, compact }) {
             ? `Not enough listed pay in ${r.title.area} to compare with national pay yet.`
             : "Pick a state to compare it with national pay."}
         </Stat>
-      )}
-      {r.days_open != null && (
-        <Stat title="Typical time open" value={`${r.days_open} days`}>How long {roleText} roles stay posted</Stat>
       )}
       <Stat title="Share of openings" value={share != null ? `${share < 1 ? "<1" : share}%` : "—"}>
         {share != null ? `of current ministry openings are ${roleText} roles` : "Pick a role to see its share."}

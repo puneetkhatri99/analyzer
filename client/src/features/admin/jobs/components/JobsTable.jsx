@@ -7,7 +7,7 @@ import TablePagination from "./TablePagination.jsx";
 
 export { CSV_COLUMNS } from "./jobColumns.jsx";
 
-export default function JobsTable({ rows, onReady, onOpen }) {
+export default function JobsTable({ rows, loading, onReady, onOpen }) {
   const [sorting, setSorting] = useState([{ id: "posted", desc: true }]);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 25 });
   const table = useReactTable({
@@ -60,7 +60,7 @@ export default function JobsTable({ rows, onReady, onOpen }) {
               ))}
             </TableRow>
           ))}
-          {total === 0 && (
+          {total === 0 && !loading && (
             <TableRow className="hover:bg-transparent"><TableCell colSpan={COLUMNS.length} className="py-10 text-center text-muted-foreground">No postings match these filters.</TableCell></TableRow>
           )}
         </TableBody>

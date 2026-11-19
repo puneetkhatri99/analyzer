@@ -1,13 +1,12 @@
 import React from "react";
 import { count, money, moneyShort } from "@/lib/format.js";
 
-// "At a glance" figures. Attendance and days open come back null until there's enough data, and are then left out.
+// "At a glance" figures. Attendance comes back null until there's enough data, and is then left out.
 export default function MarketGlance({ landing: l }) {
   const stats = [
     [l?.typical ? money(l.typical) : "…", "Median pay across all ministry roles nationwide"],
     [l?.low ? `${moneyShort(l.low)}–${moneyShort(l.high)}` : "…", "What the middle half of ministry roles pay"],
     [l?.attendance && `${count(l.attendance)}+`, "Typical weekly attendance of churches hiring"],
-    [l?.days_open && `${l.days_open} days`, "Typical time a ministry role stays open"],
   ].filter(([value]) => value);
   return (
     <section className="mh-glance">

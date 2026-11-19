@@ -21,6 +21,9 @@ async function request(path, { method = "GET", body, keepalive } = {}) {
   if (!res.ok) {
     const error = new Error(typeof data.detail === "string" ? data.detail : `Request failed (${res.status})`);
     error.status = res.status;
+    // the session expired mid-use: reloading shows the sign-in screen (fetchMe answers null there, so no loop).
+    // login and password also answer 401 for a wrong password, which is not an expired session.
+    if (res.status === 401 && !["/api/admin/me", "/api/admin/login", "/api/admin/password"].includes(path)) window.location.reload();
     throw error;
   }
   return data;

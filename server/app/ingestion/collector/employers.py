@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from app.core.db import get_conn
 from app.ingestion.collector.http import FORMAT_ERRORS, CollectorSession, as_json, format_problem, get
 from app.ingestion.collector.problems import SiteProblem
-from app.job_pages.fetcher import workday_api_url
+from app.job_pages.fetcher import is_workday, workday_api_url
 from app.shared.dates import to_date
 from app.shared.geo import split_place, state_code
 from app.shared.web import with_scheme
@@ -181,7 +181,7 @@ def _lister_for(url: str) -> tuple[Lister, str] | None:
         return smartrecruiters, first
     if host == "apply.workable.com" and first:
         return workable, first
-    if ".myworkdayjobs.com" in host and workday_api_url(url):
+    if is_workday(url) and workday_api_url(url):
         return workday, url
     return None
 

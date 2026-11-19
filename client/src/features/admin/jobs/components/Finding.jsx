@@ -18,6 +18,11 @@ export default function Finding({ filters, stats }) {
     <>
       Median listed pay for {scope} is <strong>{money(stats.median)} a year</strong>, from {count(stats.paid)} postings that state it.
       {unpaid > 0 && <> {count(unpaid)} of {count(stats.postings)} postings list no pay at all.</>}
+      {/* the public report counts hourly pay only for part-time figures, so its medians differ from these */}
+      <span className="muted small block mt-1">
+        Hourly pay counts here as a year at 2,080 hours. The public report leaves part-time and hourly jobs out of its
+        full-time figures, so its medians can differ.
+      </span>
     </>
   );
 }

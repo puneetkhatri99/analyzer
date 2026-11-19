@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { deleteJob } from "@/api/admin.js";
+import { deleteJob, fetchJobContact, rejectJob } from "@/api/admin.js";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,7 @@ export default function JobsPage({ canEdit = false }) {
   const exportCsv = () => downloadCsv(toCsv(table.getSortedRowModel().rows.map((r) => r.original), CSV_COLUMNS),
     `ministry-jobs-${d.source.join("-")}-${new Date().toISOString().slice(0, 10)}.csv`);
   const removeJob = () => deleteJob(openJob.source, openJob.post_uuid).then(() => { setOpenJob(null); d.reload(); });
+  const reject = (reason) => rejectJob(openJob.post_uuid, reason).then(() => { setOpenJob(null); d.reload(); });
   const focusRow = (id) => document.querySelector(`button.job-title[data-id="${CSS.escape(id)}"]`)?.focus();
 
   return (
@@ -52,13 +53,14 @@ export default function JobsPage({ canEdit = false }) {
               <CardTitle id="h-postings">Postings</CardTitle>
               <CardDescription>{s ? `${count(s.postings)} matching` : ""}</CardDescription>
             </CardHeader>
-            <JobsTable rows={d.rows} onReady={setTable} onOpen={setOpenJob} />
+            <JobsTable rows={d.rows} loading={!d.summary} onReady={setTable} onOpen={setOpenJob} />
           </Card>
         </div>
       )}
 
       {openJob && (
-        <JobDetail job={openJob} onClose={() => setOpenJob(null)} onDelete={canEdit ? removeJob : null}
+        <JobDetail job={openJob} onClose={() => setOpenJob(null)} onDelete={canEdit ? removeJob : null} onReject={canEdit ? reject : null}
+          onContact={canEdit && openJob.source !== "json" ? () => fetchJobContact(openJob.source, openJob.post_uuid) : null}
           returnFocus={() => focusRow(openJob.post_uuid)} />
       )}
     </>

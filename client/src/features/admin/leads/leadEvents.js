@@ -19,6 +19,10 @@ export function describe({ type, details: d = {} }) {
       return ["Copied a share link", d.report];
     case "share_email":
       return ["Emailed the report link", d.report];
+    case "report_email": // status: sent | failed | skipped (rows from before statuses were sent)
+      if (d.status === "failed") return ["Report email failed", join(d.report, d.reason)];
+      if (d.status === "skipped") return ["Report email not sent", join(d.report, d.reason)];
+      return ["Got the report by email", d.report];
     case "download":
       return ["Downloaded the report (PDF)", d.report];
     case "cta":

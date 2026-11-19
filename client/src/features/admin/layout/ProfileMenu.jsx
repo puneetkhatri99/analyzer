@@ -5,8 +5,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// The signed-in user's menu: who they are, their access, and the account actions.
-export default function ProfileMenu({ email, roleText, onChangePassword, onSignOut }) {
+// The signed-in user's menu: who they are, their access, the admin pages that live here (Settings, AI costs) and the
+// account actions.
+export default function ProfileMenu({ email, roleText, sections = [], onOpen, onChangePassword, onSignOut }) {
   const initial = email[0].toUpperCase();
   return (
     <DropdownMenu>
@@ -23,6 +24,10 @@ export default function ProfileMenu({ email, roleText, onChangePassword, onSignO
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {sections.map(([key, label]) => (
+          <DropdownMenuItem key={key} className="px-2.5 py-2" onSelect={() => onOpen(key)}>{label}</DropdownMenuItem>
+        ))}
+        {sections.length > 0 && <DropdownMenuSeparator />}
         <DropdownMenuItem className="px-2.5 py-2" onSelect={onChangePassword}>Change password</DropdownMenuItem>
         <DropdownMenuItem className="px-2.5 py-2" onSelect={onSignOut}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>

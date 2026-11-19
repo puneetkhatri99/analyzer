@@ -1,12 +1,11 @@
 """The daily lead report: settings, the cron command's once-a-day rule, and failures that must be retried.
 Resend is never called: requests.post is replaced."""
 
-from types import SimpleNamespace
+from datetime import timedelta
 
 import pytest
 
 from app.cli import main
-from app.core.config import get_settings
 from app.core.db import get_conn
 from app.leads import daily_report as dr
 
@@ -24,22 +23,6 @@ def saved_settings():
     for key, value in before.items():
         if value is not None:
             dr.set_setting(key, value)
-
-
-@pytest.fixture
-def resend(monkeypatch):
-    """Records every email 'sent'; set .fail = True to make Resend refuse."""
-    box = SimpleNamespace(sent=[], fail=False)
-
-    def post(url, headers, json, timeout):
-        box.sent.append(json)
-        return SimpleNamespace(ok=not box.fail, status_code=422 if box.fail else 200, text="domain not verified")
-
-    monkeypatch.setattr(dr.requests, "post", post)
-    monkeypatch.setattr(get_settings(), "resend_api_key", "re_test")
-    monkeypatch.setattr(get_settings(), "alert_from_email", "Leads <alerts@example.invalid>")
-    monkeypatch.setattr(dr, "script_log", lambda name: "")  # keep test runs out of the log files and Axiom
-    return box
 
 
 def test_settings_are_admin_only_and_checked(make_user, sign_in, saved_settings):
@@ -69,7 +52,7 @@ def test_hot_at_is_set_on_the_third_report(client):
             conn.execute("DELETE FROM public.leads WHERE email = %s", (LEAD,))
 
 
-def test_cron_sends_once_at_8am_and_retries_at_9_after_a_failure(client, monkeypatch, resend, saved_settings):
+def test_cron_sends_once_from_8am_retries_a_failure_and_catches_up(client, monkeypatch, resend, saved_settings):
     try:
         client.post("/api/leads", json={"name": "Dana Daily", "email": LEAD, "organization": "Daily Church"})
         with get_conn() as conn:  # hot since noon yesterday, New York time
@@ -97,9 +80,21 @@ def test_cron_sends_once_at_8am_and_retries_at_9_after_a_failure(client, monkeyp
         assert len(resend.sent) == 1 and resend.sent[0]["to"] == ["team@example.invalid"]
         assert "Dana Daily, Daily Church" in resend.sent[0]["text"]
         assert dr.get_setting(dr.SENT_FOR) == str(today.fromordinal(today.toordinal() - 1))
-        assert main(["daily-report"]) == 0 and len(resend.sent) == 1  # another run in the window: already sent
-        monkeypatch.setattr(dr, "eastern_now", lambda: (today, 10))
-        assert main(["daily-report"]) == 0 and len(resend.sent) == 1  # 10 AM: outside the window
+        assert main(["daily-report"]) == 0 and len(resend.sent) == 1  # another check the same day: already sent
+        monkeypatch.setattr(dr, "eastern_now", lambda: (today, 15))
+        assert main(["daily-report"]) == 0 and len(resend.sent) == 1  # later that day: still sent once
+
+        # the server slept through two mornings: both missed days go out, oldest first, then nothing more
+        monkeypatch.setattr(dr, "eastern_now", lambda: (today + timedelta(days=2), 14))
+        assert main(["daily-report"]) == 0 and len(resend.sent) == 3
+        assert dr.get_setting(dr.SENT_FOR) == str(today + timedelta(days=1))
+        assert main(["daily-report"]) == 0 and len(resend.sent) == 3
+
+        # re-sending an old day by hand, or a future one, leaves the marker alone: no catch-up storm, no skipped days
+        assert main(["daily-report", "--day", str(today - timedelta(days=20))]) == 0 and len(resend.sent) == 4
+        assert main(["daily-report", "--day", str(today + timedelta(days=30))]) == 0 and len(resend.sent) == 5
+        assert dr.get_setting(dr.SENT_FOR) == str(today + timedelta(days=1))
+        assert main(["daily-report"]) == 0 and len(resend.sent) == 5
     finally:
         with get_conn() as conn:
             conn.execute("DELETE FROM public.leads WHERE email = %s", (LEAD,))
@@ -114,3 +109,25 @@ def test_a_day_without_hot_leads_still_reports(monkeypatch):
     subject, text = dr.render(dr.report_data(date(2026, 11, 16)))
     assert subject == "MinistryHub daily leads: 0 new hot leads (Nov 16)"
     assert "No new hot leads that day." in text and "New sign-ups: 2" in text
+
+
+def test_an_odd_offer_from_the_public_site_never_breaks_the_email():
+    assert dr._offer({"amount": 52000, "unit": "year", "verdict": "In range."}) == "$52,000 a year (In range)"
+    assert dr._offer({"amount": "18.5", "unit": "hour"}) == "$18.50 an hour"
+    for odd in ({}, {"amount": "85k"}, {"amount": None}, {"amount": 50000, "verdict": 7}):
+        assert dr._offer(odd) in ("an offer", "$50,000 a year")
+
+
+def test_the_api_timer_checks_until_stopped(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dr, "CHECK_EVERY", 0.01)
+    monkeypatch.setattr(dr, "send_if_due", lambda: calls.append(1) or (_ for _ in ()).throw(RuntimeError("db down")))
+    stop = dr.start_scheduler()
+    import time
+
+    time.sleep(0.2)
+    stop.set()
+    seen = len(calls)
+    assert seen >= 2  # a failed check (here: an error every time) doesn't end the timer
+    time.sleep(0.1)
+    assert len(calls) <= seen + 1  # stopped

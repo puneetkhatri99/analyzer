@@ -42,7 +42,7 @@ DENOMINATIONS = [
     for pattern, name in [
         (r"southern baptist|\bsbc\b", "Southern Baptist"),
         (r"\bbaptist", "Baptist"),
-        (r"roman catholic|\bcatholic|\bdiocese|\barchdiocese|\bparish\b", "Catholic"),
+        (r"roman catholic|\bcatholic", "Catholic"),
         (r"\bpresbyterian|\bpc\(usa\)|\bpca\b", "Presbyterian"),
         (r"missouri synod|\blcms\b", "Lutheran Church-Missouri Synod"),
         (r"\blutheran|\belca\b", "Lutheran"),
@@ -56,10 +56,14 @@ DENOMINATIONS = [
         (r"salvation army", "Salvation Army"),
         (r"evangelical free|\befca\b", "Evangelical Free"),
         (r"christian and missionary alliance|\bc&ma\b", "Christian and Missionary Alliance"),
+        (r"united church of christ|\bucc\b", "United Church of Christ"),
         (r"church of christ", "Church of Christ"),
         (r"\bwesleyan", "Wesleyan Church"),
         (r"\breformed\b", "Reformed"),
         (r"non-?denominational", "Non-denominational"),
+        # last: Episcopal, Anglican and Methodist bodies have dioceses too. Not "parish": Louisiana's counties are
+        # parishes ("Acadia Parish Schools"), and Catholic parishes nearly always say "Catholic".
+        (r"\b(arch)?diocese", "Catholic"),
     ]
 ]
 DENOM_LABEL_RE = re.compile(r"\bDenomination:?\s+(.{0,60})", re.I)

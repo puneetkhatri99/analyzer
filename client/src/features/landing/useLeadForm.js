@@ -15,21 +15,27 @@ export function useLeadForm() {
   const [form, setForm] = useState({
     role: "", location: "", attendance: ANY_SIZE,
     name: lead?.name || "", email: lead?.email || "", organization: lead?.organization || "",
+    emailReport: false,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [missing, setMissing] = useState([]);
 
-  // works for both select values and input change events
-  const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value?.target ? value.target.value : value }));
-  const forget = () => { forgetLead(); setLead(null); };
+  // works for select values, input change events and the email switch (a checkbox)
+  const set = (key) => (value) => setForm((f) => ({
+    ...f, [key]: value?.target ? (value.target.type === "checkbox" ? value.target.checked : value.target.value) : value,
+  }));
+  // "Not you?": also empty the fields, so the next person on a shared computer doesn't see (or send as) this one
+  const forget = () => { forgetLead(); setLead(null); setForm((f) => ({ ...f, name: "", email: "", organization: "" })); };
 
-  const openReport = () => {
-    if (next) { window.location.href = next; return; }
+  // the report's query string: the shared one, or the visitor's choices
+  const reportSearch = () => {
+    if (next) return new URL(next, window.location.origin).search.slice(1);
     const state = form.location !== NATIONWIDE ? [form.location] : [];
     const size = form.attendance !== ANY_SIZE ? [form.attendance] : [];
-    window.location.href = `/report?${reportQuery({ role: [form.role], state, size })}`;
+    return reportQuery({ role: [form.role], state, size });
   };
+  const openReport = () => { window.location.href = next || `/report?${reportSearch()}`; };
 
   // Radix selects aren't native inputs, so the browser can't check them; this does. It runs on the submit button's
   // click, before the browser checks the name and email, so the form is checked top to bottom.
@@ -56,7 +62,7 @@ export function useLeadForm() {
     const search = shared
       ? { role: list(shared.role, 200), location: list(shared.state, 200) || NATIONWIDE, attendance: list(shared.size, 100) }
       : { role: form.role, location: form.location, attendance };
-    postLead({ ...who, ...search, shared: Boolean(next) })
+    postLead({ ...who, ...search, shared: Boolean(next), email_report: form.emailReport, report: reportSearch() })
       .then(() => { saveLead(who); openReport(); })
       .catch((err) => { setError(err.message); setBusy(false); });
   };

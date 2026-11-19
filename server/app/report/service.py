@@ -5,7 +5,6 @@ Nothing here returns counts, employer names, sources or links: the public must n
 """
 
 from collections.abc import Callable, Iterable
-from datetime import date
 from statistics import median
 from typing import Any
 
@@ -18,9 +17,7 @@ Job = dict[str, Any]
 
 MIN_PAID = 5  # below this many jobs with pay, a figure isn't shown and the search widens
 CONFIDENCE = [(30, "Strong"), (10, "Moderate"), (MIN_PAID, "Limited")]  # proposal; tune once the data grows
-MIN_SAMPLE = 30  # churches or closed jobs needed before a landing figure is shown
-CLOSE_WINDOW = 14  # a closing date counts only when known to within this many days
-RECENT_DAYS = 90  # a job never checked counts as active only if first seen this recently
+MIN_SAMPLE = 30  # churches needed before the landing attendance figure is shown
 HIDDEN_ROLES = {"Healthcare"}  # the brief removes medical jobs from the public tool
 
 SIZES = [
@@ -48,14 +45,15 @@ def _pay(d: Job, job_type: str) -> float | None:
 
 
 def blended_jobs() -> list[Job]:
-    """Every US job from every source as one list (brief P5), with the state normalised and medical roles removed."""
+    """Every US job from every source as one list (brief P5), with the state normalised and medical roles removed.
+    Feed postings judged out of scope aren't in the job tables at all (rejected_postings); ones not reviewed yet are
+    left out until the AI (or an admin) has judged them."""
     out = []
     for source in ("json", "churches", "nonprofits"):
         for d in load_jobs(source):
-            if d["country"] not in ("US", "United States") or d["role"] in HIDDEN_ROLES:
+            if d["country"] not in ("US", "United States") or d["role"] in HIDDEN_ROLES or not d["reviewed"]:
                 continue
             d["state"] = state_name(d["region"])
-            d["source"] = source
             out.append(d)
     return out
 
@@ -117,20 +115,11 @@ def openings_label(n: int) -> str:
     return f"{n // step * step:,}+" if n >= step else "hundreds of"
 
 
-def _day(v: str | None) -> date | None:
-    return date.fromisoformat(v[:10]) if v else None
-
-
-def active_openings(jobs: list[Job], today: date | None = None) -> int:
-    """Jobs still open: not expired, and either confirmed live by a page check or first seen within RECENT_DAYS.
-    A repost (same employer, title and state) counts once.
+def distinct_openings(jobs: list[Job]) -> int:
+    """How many openings the figures are drawn from: a repost (same employer, title and state) counts once.
     shortcut: reposts matched on exact text only; switch to the openings table once reposts are linked (brief D3)."""
-    today = today or date.today()
     seen = set()
     for d in jobs:
-        status, start = d.get("status"), _day(d.get("first_indexed"))
-        if status == "expired" or (status != "open" and not (start and (today - start).days <= RECENT_DAYS)):
-            continue
         employer = (d.get("company_name") or "").strip().lower()
         title = (d.get("job_name") or "").strip().lower()
         seen.add((employer, title, d["state"]) if employer and title else id(d))  # no employer: can't spot a repost
@@ -147,18 +136,6 @@ def typical_attendance(jobs: list[Job]) -> int | None:
     if len(by_church) < MIN_SAMPLE:
         return None
     return int(median(by_church.values())) // 50 * 50
-
-
-def typical_days_open(jobs: list[Job]) -> int | None:
-    """Median days from first seen to closing, using only closures pinned down to CLOSE_WINDOW days (a recheck saw
-    the job open, the next one saw it closed). None until MIN_SAMPLE such closures exist.
-    shortcut: reposts are not linked yet (brief D3), so a job some sites close at 30 days and repost counts short."""
-    days = []
-    for d in jobs:
-        start, live, gone = _day(d.get("first_indexed")), _day(d.get("last_live_at")), _day(d.get("expired_at"))
-        if start and live and gone and 0 <= (gone - live).days <= CLOSE_WINDOW and live >= start:
-            days.append((live - start).days + (gone - live).days / 2)
-    return round(median(days)) if len(days) >= MIN_SAMPLE else None
 
 
 def _as_of(jobs: list[Job]) -> str | None:
@@ -239,12 +216,11 @@ def build_report(filters: dict[str, Any], jobs: list[Job] | None = None) -> dict
         "pay": pay,
         "vs_national": vs_national,
         "share_percent": share,
-        "days_open": typical_days_open(base),
         "by_role": _rows(in_area(("role",)), "role", job_type, order=ROLE_ORDER),
         "by_size": by_size,
         "by_state": _rows([d for d in jobs if _matches(d, f, skip=("state",))], "state", job_type, limit=8),
         "by_denomination": _rows(in_area(("denomination",)), "denomination", job_type, limit=6),
-        "openings_label": openings_label(active_openings(jobs)),
+        "openings_label": openings_label(distinct_openings(jobs)),
         "as_of": _as_of(jobs),
     }
 
@@ -269,8 +245,7 @@ def report_options(jobs: list[Job] | None = None) -> dict[str, Any]:
             "low": national and national["low"],
             "high": national and national["high"],
             "attendance": typical_attendance(jobs),
-            "days_open": typical_days_open(jobs),
-            "openings_label": openings_label(active_openings(jobs)),
+            "openings_label": openings_label(distinct_openings(jobs)),
             "as_of": _as_of(jobs),
         },
     }

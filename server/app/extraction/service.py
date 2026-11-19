@@ -2,11 +2,12 @@
 
 import logging
 import re
+from datetime import date
 from typing import Any
 
 from openai import OpenAI
 
-from app.ai_usage.service import record
+from app.ai_usage.service import BudgetReached, ensure_budget, record
 from app.core.config import get_settings
 from app.extraction.page import read_page
 from app.extraction.prompts import CHURCH_PROMPT, FENCE_RE, INJECTION_RE, INSTRUCTIONS, WEB_SEARCH_PROMPT
@@ -23,6 +24,22 @@ class ExtractionError(Exception):
         self.status_code, self.detail = status_code, detail
 
 
+MAX_FIGURE_AGE = 8  # years: older attendance figures say little about a church today
+LOOKUP_FAILED = "Church size lookup failed"  # starts the note when the search itself broke (retry later)
+
+
+def figure_doubt(facts: ChurchFacts) -> str | None:
+    """Why a looked-up attendance figure can't be trusted, or None. The model sometimes reports a number that isn't
+    in its own quote (a typo, or a figure from another sentence), or one from a decades-old article."""
+    numbers = {int(n.replace(",", "")) for n in re.findall(r"\d{1,3}(?:,\d{3})+|\d+", facts.evidence or "")}
+    size = facts.church_size or 0
+    if size not in numbers and not any(abs(n / 52 - size) <= 1 for n in numbers):  # a yearly total / 52 is fine
+        return "the number isn't in the quoted source text"
+    if facts.year and facts.year < date.today().year - MAX_FIGURE_AGE:
+        return f"the figure is from {facts.year}"
+    return None
+
+
 def lookup_church(
     client: Any, job: JobExtraction, url: str = "", admin_email: str | None = None
 ) -> tuple[JobExtraction, str | None, list[str]]:
@@ -35,18 +52,28 @@ def lookup_church(
         site=f" (website: {job.org_website})" if job.org_website else "",
     )
     try:
+        ensure_budget()
         response = client.responses.parse(
             model=model, input=prompt, text_format=ChurchFacts, tools=[{"type": "web_search"}], max_tool_calls=3
         )
         record(response, purpose="church_lookup", url=url, model=model, admin_email=admin_email)
         facts = response.output_parsed
+    except BudgetReached as e:  # a "failed" lookup: callers try the church again once the limit allows
+        log.warning("Church size lookup for %s skipped: %s", job.org_name, e)
+        return job, None, [f"{LOOKUP_FAILED} (monthly AI limit reached)."]
     except Exception as e:  # network, quota, bad answer...: extraction carries on without a size
         log.exception("Church size lookup failed for %s (%s)", job.org_name, url)
-        return job, None, [f"Church size lookup failed ({e.__class__.__name__})."]
+        return job, None, [f"{LOOKUP_FAILED} ({e.__class__.__name__})."]
     source = (
         facts.source_url if facts and facts.source_url and re.match(r"https?://[^\s]+$", facts.source_url) else None
     )
-    if not facts or facts.church_size is None or not source:
+    # a denomination found online is worth keeping even when attendance isn't
+    if facts and facts.denomination and not job.denomination:
+        job = job.model_copy(update={"denomination": facts.denomination})
+    doubt = facts and facts.church_size is not None and source and figure_doubt(facts)
+    if doubt:
+        log.warning("Church size lookup for %s: %s not used (%s)", job.org_name, facts.church_size, doubt)
+    if not facts or facts.church_size is None or not source or doubt:
         log.info("Church size lookup for %s: not found online", job.org_name)
         return (
             job,
@@ -55,8 +82,6 @@ def lookup_church(
         )
     log.info("Church size lookup for %s: %s weekly, from %s", job.org_name, f"{facts.church_size:,}", source)
     update: dict[str, Any] = {"church_size": facts.church_size}
-    if not job.denomination and facts.denomination:
-        update["denomination"] = facts.denomination
     quote = re.sub(r"[\x00-\x1f<>]", " ", facts.evidence or "")[:200]
     notes = [
         f"Church size {facts.church_size:,} was found online, not in the posting: {source}"
@@ -74,6 +99,10 @@ def extract(url: str, admin_email: str) -> dict[str, Any]:
     settings = get_settings()
     if not settings.openai_api_key:
         raise ExtractionError(503, "OPENAI_API_KEY is not set on the server")
+    try:
+        ensure_budget()
+    except BudgetReached as e:
+        raise ExtractionError(429, f"{e}. Raise the limit in Admin → AI costs to add jobs this way.") from e
     log.info("Extract requested by %s: %s", admin_email, url)
     try:
         page = read_page(url)  # every hop of a redirect is checked against private networks

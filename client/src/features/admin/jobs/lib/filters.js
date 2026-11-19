@@ -2,7 +2,7 @@
 export const SOURCES = ["json", "churches", "nonprofits"];
 
 export const EMPTY_FILTERS = {
-  search: "", role: "", region: "", denomination: "", min_church_size: 0, hours: "", status: "", origin: "",
+  search: "", role: "", region: "", denomination: "", min_church_size: 0, hours: "", origin: "",
   country: "", remote: "", min_salary: 0, has_pay: false,
 };
 

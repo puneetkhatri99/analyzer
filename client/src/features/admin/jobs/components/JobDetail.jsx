@@ -1,21 +1,58 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { ORIGINS, count, listedPay, longDate, money } from "@/lib/format.js";
 import Confirm from "@/components/Confirm.jsx";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const yesNo = (v) => (v == null || v === "" ? null : String(v) === "true" ? "Yes" : "No");
 
-function statusText(d) {
-  if (d.status === "expired") return `Expired · found closed ${longDate(d.expired_at)}${d.last_live_at ? `, last seen open ${longDate(d.last_live_at)}` : ""}`;
-  if (d.status === "open") return `Open · checked ${longDate(d.last_live_at)}`;
-  return "Not verified · the job page couldn’t be checked";
+// Rejecting a feed posting moves it to the Rejected jobs tab: out of every view and figure, and skipped when the feed
+// sends it again. It can be included again from that tab.
+function RejectForm({ onReject }) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState(null);
+  return (
+    <section>
+      <h3>Not a church, school or ministry job?</h3>
+      <form className="mt-2 flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); onReject(reason.trim()).catch((err) => setError(err.message)); }}>
+        <Input aria-label="Why reject this job" placeholder="Why, e.g. public school, not a church" className="min-w-0 flex-1"
+          value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
+        <Button type="submit" variant="outline" size="sm">Reject job</Button>
+      </form>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </section>
+  );
 }
 
-// onDelete is given only to users who may delete (editors and admins); it returns a promise.
-// returnFocus puts focus back on the job's row once the dialog has closed.
-export default function JobDetail({ job, onClose, onDelete, returnFocus }) {
+// The person to contact about a BizDev job, from the sheet. Only editors and admins get onContact; the job lists never carry it.
+function Contact({ onContact }) {
+  const [contact, setContact] = useState(undefined); // undefined = loading
+  const [error, setError] = useState(null);
+  useEffect(() => { onContact().then(setContact).catch((e) => { setError(e.message); setContact(null); }); }, []);
+  const name = contact && [contact.first_name, contact.last_name].filter(Boolean).join(" ");
+  return (
+    <section>
+      <h3>Person to contact</h3>
+      {contact === undefined && <p className="muted small" aria-busy="true">Loading…</p>}
+      {error && <p className="form-error" role="alert">Couldn’t load the contact ({error})</p>}
+      {contact && (
+        <dl className="details">
+          <dt>Name</dt><dd className={name ? "" : "muted"}>{name || "Not stated"}</dd>
+          <dt>Title</dt><dd className={contact.title ? "" : "muted"}>{contact.title || "Not stated"}</dd>
+          <dt>Email</dt>
+          <dd className={contact.email ? "" : "muted"}>{contact.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : "Not stated"}</dd>
+        </dl>
+      )}
+    </section>
+  );
+}
+
+// onDelete and onReject are given only to users who may change jobs (editors and admins); they return promises.
+// onContact (editors and admins, BizDev jobs only) loads the person to contact. returnFocus puts focus back on the
+// job's row once the dialog has closed.
+export default function JobDetail({ job, onClose, onDelete, onReject, onContact, returnFocus }) {
   const [deleteError, setDeleteError] = useState(null);
 
   const pay = listedPay(job);
@@ -35,7 +72,7 @@ export default function JobDetail({ job, onClose, onDelete, returnFocus }) {
       ["Church size", job.church_size != null ? (
         <>
           {count(job.church_size)}+ weekly attendance
-          {job.church_size_source && (
+          {/^https?:\/\//i.test(job.church_size_source || "") && (
             <> · <a href={job.church_size_source} target="_blank" rel="noopener noreferrer">found online</a></>
           )}
         </>
@@ -43,7 +80,6 @@ export default function JobDetail({ job, onClose, onDelete, returnFocus }) {
     ]],
     ["Record", [
       ["Date posted", job.first_indexed && longDate(job.first_indexed)],
-      ["Status", statusText(job)],
       ["Added via", `${ORIGINS[job.origin] || job.origin}${job.added_at ? ` · ${longDate(job.added_at)}` : ""}`],
       ["Job site", job.board_source],
     ]],
@@ -80,6 +116,8 @@ export default function JobDetail({ job, onClose, onDelete, returnFocus }) {
             </dl>
           </section>
         ))}
+        {onContact && <Contact onContact={onContact} />}
+        {job.source === "json" && onReject && <RejectForm onReject={onReject} />}
 
         <DialogFooter className="flex-row flex-wrap justify-start sm:justify-start">
           {job.post_url && (
@@ -88,7 +126,7 @@ export default function JobDetail({ job, onClose, onDelete, returnFocus }) {
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>Close</Button>
-          {onDelete && (
+          {onDelete && job.source !== "json" && ( // feed jobs are rejected instead, so the feed skips them later
             <Confirm title={`Delete “${job.job_name || "this job"}”?`} action="Delete job"
               description="It is removed for good from every view and report."
               onConfirm={() => onDelete().catch((e) => setDeleteError(e.message))}>

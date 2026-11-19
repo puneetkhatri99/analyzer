@@ -79,7 +79,7 @@ def _flow(monkeypatch):
             == 200
         )
         rows = c.get("/api/jobs?source=churches&search=Youth Pastor (test)").json()["rows"]
-        assert len(rows) == 1 and rows[0]["salary_annual_mid"] == 55000 and rows[0]["status"] == "open"
+        assert len(rows) == 1 and rows[0]["salary_annual_mid"] == 55000
         assert rows[0]["origin"] == "admin_page" and "added_by" not in rows[0]
         assert c.get("/api/jobs?source=churches&origin=admin").json()["total"] >= 1
         not_job = {**r["job"], "page_type": "not_job_posting"}
@@ -106,7 +106,8 @@ def _flow(monkeypatch):
             cost = conn.execute("SELECT cost_usd FROM public.ai_usage WHERE url = %s", (URL,)).fetchone()[0]
         assert float(cost) == round((8_000 * 0.75 + 2_000 * 0.075 + 1_000 * 4.50) / 1e6 + 0.02, 6)  # $0.03065
         report = c.get("/api/admin/costs").json()
-        assert float(report["totals"]["total"]) >= float(cost) and any(r["url"] == URL for r in report["recent"])
+        assert float(report["totals"]["total"]) >= float(cost)
+        assert any(r["url"] == URL for r in c.get("/api/admin/costs/calls", params={"q": URL}).json()["rows"])
     finally:
         with get_conn() as conn:
             conn.execute("DELETE FROM public.ai_usage WHERE url = %s", (URL,))
@@ -200,12 +201,15 @@ def test_church_lookup_rules():
         responses=SimpleNamespace(parse=lambda **kw: SimpleNamespace(output_parsed=ChurchFacts(**f)))
     )
     # a size with no source is not accepted
-    j, src, _ = service.lookup_church(answer(church_size=300, denomination=None, source_url=None, evidence=None), job)
+    j, src, _ = service.lookup_church(
+        answer(church_size=300, year=None, denomination=None, source_url=None, evidence=None), job
+    )
     assert j.church_size is None and src is None
     # a sourced size is used, the missing denomination filled, and very large figures flagged
     j, src, notes = service.lookup_church(
         answer(
             church_size=6000,
+            year=2025,
             denomination="Baptist",
             source_url="https://grace.example/about",
             evidence="6,000 each Sunday",
@@ -214,6 +218,42 @@ def test_church_lookup_rules():
     )
     assert j.church_size == 6000 and j.denomination == "Baptist" and src == "https://grace.example/about"
     assert any("very large" in n for n in notes)
+
+    # a number that isn't in its own quote, or a figure from long ago, is not used; the denomination still is
+    j, src, _ = service.lookup_church(
+        answer(
+            church_size=1900,
+            year=2025,
+            denomination="PCA",
+            source_url="https://grace.example/2025",
+            evidence="an average of 1,547 people attended",
+        ),
+        job,
+    )
+    assert j.church_size is None and src is None and j.denomination == "PCA"
+    j, src, _ = service.lookup_church(
+        answer(
+            church_size=6000,
+            year=2007,
+            denomination=None,
+            source_url="https://news.example/2007",
+            evidence="Congregation size: 6,000",
+        ),
+        job,
+    )
+    assert j.church_size is None and src is None
+    # a yearly total divided by 52 is fine
+    j, src, _ = service.lookup_church(
+        answer(
+            church_size=421,
+            year=2024,
+            denomination=None,
+            source_url="https://grace.example/report",
+            evidence="21,896 attendance in 2024",
+        ),
+        job,
+    )
+    assert j.church_size == 421 and src == "https://grace.example/report"
 
     # a failed lookup never breaks extraction
     def boom(**kw):

@@ -48,6 +48,11 @@ export default function LeadForm({ options }) {
           </>
         )}
 
+        <label className="mh-switch">
+          <input type="checkbox" role="switch" checked={form.emailReport} onChange={set("emailReport")} />
+          <span>Email me this report{lead ? ` (to ${lead.email})` : ""}</span>
+        </label>
+
         {error && <p className="mh-error" role="alert">{error}</p>}
         <Button type="submit" className="mh-btn mh-btn-yellow mh-btn-block" disabled={busy || !options} onClick={checkChoices}>
           {busy ? "Preparing your report…" : <>See my report <span aria-hidden="true">→</span></>}

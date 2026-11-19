@@ -20,6 +20,16 @@ def found_on_page(value: str | float, text: str) -> bool:
     return not words or sum(w in text for w in words) / len(words) >= 0.6
 
 
+def complete_pay(lo: float | None, hi: float | None, period: str | None) -> tuple[float, float, str] | None:
+    """A model's pay made whole and checked: one figure fills both ends, a missing period is guessed from the top
+    figure (under 200 is hourly, as the feed's parser does). None when there's no pay or it isn't a believable wage."""
+    lo = lo if lo is not None else hi
+    hi = hi if hi is not None else lo
+    if lo is None:
+        return None
+    return sane_pay(lo, hi, period or ("hour" if hi < 200 else "year"))
+
+
 def validate(job: JobExtraction, page: str | None = None) -> tuple[JobExtraction, list[str]]:
     warnings: list[str] = []
     if job.page_type != "job_posting":
@@ -31,14 +41,13 @@ def validate(job: JobExtraction, page: str | None = None) -> tuple[JobExtraction
     if d["org_website"] and not re.match(r"https?://[^\s/]+\.[^\s]+$", d["org_website"]):
         d["org_website"] = None
     if d["salary_min"] is not None or d["salary_max"] is not None:
-        lo = d["salary_min"] if d["salary_min"] is not None else d["salary_max"]
-        hi = d["salary_max"] if d["salary_max"] is not None else lo
-        period = d["salary_period"] or ("hour" if lo < 200 else "year")
-        if sane_pay(lo, hi, period) is None:
-            warnings.append(f"Pay ({lo:g}–{hi:g}) is outside a believable range and was removed.")
+        pay = complete_pay(d["salary_min"], d["salary_max"], d["salary_period"])
+        if pay is None:
+            shown = "–".join(f"{v:g}" for v in (d["salary_min"], d["salary_max"]) if v is not None)
+            warnings.append(f"Pay ({shown}) is outside a believable range and was removed.")
             d["salary_min"] = d["salary_max"] = d["salary_period"] = None
         else:
-            d["salary_min"], d["salary_max"], d["salary_period"] = lo, hi, period
+            d["salary_min"], d["salary_max"], d["salary_period"] = pay
     if d["church_size"] is not None and not 1 <= d["church_size"] <= 100_000:
         d["church_size"] = None
     if d["date_posted"]:

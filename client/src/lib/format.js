@@ -19,11 +19,14 @@ export function isoDate(value) {
   return String(value).slice(0, 10);
 }
 
-export function longDate(value) {
-  if (!value) return "—";
-  const d = new Date(`${String(value).slice(0, 10)}T00:00:00`);
-  return isNaN(d) ? "—" : d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+// The calendar day of a date or timestamp: "Nov 10, 2026" (admin) or, with month "long", "November 10, 2026".
+export function longDate(value, month = "short", empty = "—") {
+  const d = new Date(`${String(value || "").slice(0, 10)}T00:00:00`);
+  return isNaN(d) ? empty : d.toLocaleDateString("en-US", { day: "numeric", month, year: "numeric" });
 }
+
+// "Nov 10, 3:04 PM": a recent moment, for logs.
+export const when = (t) => new Date(t).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 // How a posting arrived (the API's `origin`).
 export const ORIGINS = {
@@ -33,13 +36,11 @@ export const ORIGINS = {
   admin_web_search: "Admin · via web search",
   collector: "Auto-collected",
 };
+// The "Added via" filter groups both admin origins under one choice (the API's origin=admin).
+export const ORIGIN_FILTERS = { feed: ORIGINS.feed, excel: ORIGINS.excel, admin: "Added by admin", collector: ORIGINS.collector };
 
 // Rows with fewer paid postings than this are listed but not benchmarked.
 export const MIN_PAID = 5;
 
 // "November 10, 2026" for the public pages; "…" while loading.
-export function longDay(value) {
-  if (!value) return "…";
-  const d = new Date(`${String(value).slice(0, 10)}T00:00:00`);
-  return isNaN(d) ? "…" : d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-}
+export const longDay = (value) => longDate(value, "long", "…");

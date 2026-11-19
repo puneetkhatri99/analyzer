@@ -35,10 +35,11 @@ How the collector works: [COLLECTOR_HOW_IT_WORKS.md](COLLECTOR_HOW_IT_WORKS.md).
 8. **Denomination is assumed** from the board: every SBC job is "Southern Baptist", every EFCA job "Evangelical Free".
 9. **No AI church-size lookup.** Church size is saved only when the page states it (ChurchStaffing usually does). The admin
    panel's paid lookup isn't used.
-10. **The same job on two sites is saved twice** (e.g. SBC and ChurchStaffing), because their links differ. It's also not
-    checked against the church jobs feed tab.
+10. **The same job on two sites is saved twice** (e.g. SBC and ChurchStaffing), because their links differ. Jobs already
+    in the daily jobs feed (kept or rejected) are skipped.
 11. **Titles are kept as written**, including campus codes such as "Groups Pastor (SLK)".
-12. **Closed jobs aren't caught by the collector itself.** The weekly `fetch_jobs churches --recheck` marks them.
+12. **Closed jobs aren't tracked.** The collector skips a job whose page says it's closed, but a saved job that closes
+    later stays in the data (open/closed tracking was removed; see the README).
 
 ## Points of failure
 

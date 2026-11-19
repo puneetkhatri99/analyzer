@@ -6,12 +6,11 @@ import requests
 from bs4 import BeautifulSoup
 
 from app.extraction.prompts import HIDDEN
-from app.job_pages.fetcher import workday_api_url
+from app.job_pages.fetcher import MIN_READABLE_CHARS, is_workday, workday_api_url
 from app.job_pages.parser import job_postings
 from app.shared.web import BLOCKED_RE, HEADERS, get_public
 
 MAX_PAGE_CHARS = 15_000  # enough for any job description; keeps the prompt cheap
-MIN_READABLE_CHARS = 400  # below this the page is a JavaScript shell or a block page
 NOISE_TAGS = ["script", "style", "noscript", "svg", "nav", "header", "footer", "form", "template", "iframe"]
 
 
@@ -35,7 +34,7 @@ def page_text(html: str) -> str | None:
 def read_page(url: str) -> str | None:
     """The page as prompt text, or None when it can't be read directly (blocked, JavaScript-only, error).
     Raises UnsafeURLError when the URL, or any page it redirects to, is in a private network."""
-    workday = workday_api_url(url) if ".myworkdayjobs.com/" in url else None
+    workday = workday_api_url(url) if is_workday(url) else None
     accept = "application/json" if workday else "text/html,*/*"
     try:
         r = get_public(workday or url, headers={**HEADERS, "Accept": accept}, timeout=20)

@@ -1,7 +1,5 @@
 """Public report: widening, confidence, part-time kept apart, and nothing private leaving the server."""
 
-from datetime import date
-
 from app.report import service as report
 from app.shared.geo import state_name
 
@@ -90,40 +88,19 @@ def test_attendance_counts_each_church_once_and_needs_enough_churches():
     assert report.typical_attendance(churches + mega + nonprofit) == 100  # 30 churches; the megachurch counts once
 
 
-def test_days_open_uses_only_closures_pinned_to_two_weeks():
-    def closed(start, live, gone):
-        return {"first_indexed": start, "last_live_at": live, "expired_at": gone}
-
-    pinned = [closed("2026-09-01", "2026-10-01T09:00:00+00:00", "2026-10-11")] * 30  # 30 + 10/2 = 35 days
-    vague = [closed("2026-01-01", None, "2026-11-06")] * 100  # never seen open by a check: when it closed is unknown
-    reopened = [closed("2026-09-01", "2026-11-10", "2026-10-11")] * 100  # seen open again after closing
-    assert report.typical_days_open(pinned[:29] + vague + reopened) is None
-    assert report.typical_days_open(pinned + vague + reopened) == 35
-
-
-def test_active_openings_skip_expired_stale_and_reposts():
-    today = date(2026, 11, 17)
-
-    def posting(status, first_seen="2026-11-01", employer="Grace Church", title="Worship Pastor", state="Ohio"):
-        return {
-            "status": status,
-            "first_indexed": first_seen,
-            "company_name": employer,
-            "job_name": title,
-            "state": state,
-        }
+def test_distinct_openings_count_a_repost_once():
+    def posting(employer="Grace Church", title="Worship Pastor", state="Ohio"):
+        return {"company_name": employer, "job_name": title, "state": state}
 
     jobs = [
-        posting("open", "2024-01-01"),  # old, but a check saw it live
-        posting("open", employer=" grace church "),  # the same job reposted: counted once
-        posting("open", state="Indiana"),  # same title elsewhere: a different opening
-        posting("unverified", title="Youth Pastor"),  # never checked, but recent
-        posting("unverified", "2026-01-01", title="Organist"),  # never checked and old: likely closed
-        posting("expired", title="Choir Director"),
-        posting("unverified", employer=None),  # no employer: counted on its own
-        posting("unverified", employer=None),
+        posting(),
+        posting(employer=" grace church "),  # the same job reposted: counted once
+        posting(state="Indiana"),  # same title elsewhere: a different opening
+        posting(title="Youth Pastor"),
+        posting(employer=None),  # no employer: counted on its own
+        posting(employer=None),
     ]
-    assert report.active_openings(jobs, today) == 5
+    assert report.distinct_openings(jobs) == 5
 
 
 def test_figures_are_rounded():

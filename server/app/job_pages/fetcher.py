@@ -13,10 +13,16 @@ from app.shared.web import BLOCKED_RE, HEADERS, with_scheme
 
 TIMEOUT = 15
 HOST_DELAY = 1.0  # seconds between requests to the same site
+MIN_READABLE_CHARS = 400  # below this the page is a JavaScript shell or a block page
 
 log = logging.getLogger("job_pages")
 
 Result = tuple[str, dict[str, Any]]  # (status, parsed page fields)
+
+
+def is_workday(url: str) -> bool:
+    """A Workday job site: the host itself ends in .myworkdayjobs.com (not "x.myworkdayjobs.com.example.net")."""
+    return (urlsplit(url).hostname or "").endswith(".myworkdayjobs.com")
 
 
 def workday_api_url(url: str) -> str | None:
@@ -44,7 +50,7 @@ def check_workday(url: str) -> Result:
         return ("blocked" if r.status_code in (401, 403, 429) else "error"), {}
     try:
         info = r.json().get("jobPostingInfo") or {}
-    except ValueError:
+    except (ValueError, AttributeError):  # not JSON, or JSON that isn't an object
         return "unknown", {}
     if not info:
         return "expired", {}
@@ -53,7 +59,7 @@ def check_workday(url: str) -> Result:
 
 def fetch_one(url: str, org_name: str | None) -> Result:
     url = with_scheme(url)
-    if ".myworkdayjobs.com/" in url:
+    if is_workday(url):
         status, page = check_workday(url)
         log.debug("GET %s -> %s (Workday job API)", url, status)
         return status, page
@@ -78,7 +84,7 @@ def fetch_one(url: str, org_name: str | None) -> Result:
     if EXPIRED_RE.search(page["text"][:5000]) and not page["salary"]:
         log.debug("GET %s -> expired (%s, page says the job is closed)", url, took)
         return "expired", page
-    if len(page["text"]) < 400 and not page["structured"]:
+    if len(page["text"]) < MIN_READABLE_CHARS and not page["structured"]:
         # a JavaScript shell (Paycom, ADP, HRM Direct...): open or closed can't be told
         log.debug("GET %s -> unknown (%s, JavaScript-only page: open or closed can't be told)", url, took)
         return "unknown", page

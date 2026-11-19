@@ -103,6 +103,20 @@
 .mh-returning { background: var(--mh-cream); border-radius: 10px; padding: 12px 14px; font-size: var(--fs-body); }
 .mh-error { color: #b42318; font-size: var(--fs-small); font-weight: 600; }
 .mh-fine { font-size: var(--fs-small); color: var(--mh-muted); text-align: center; }
+/* "Email me this report": a native checkbox drawn as a switch, so keyboard and screen readers work as usual */
+.mh-switch { display: flex; align-items: center; gap: 10px; font-size: var(--fs-body); cursor: pointer; }
+.mh-switch input {
+  appearance: none; flex: none; position: relative; width: 40px; height: 22px; margin: 0; border-radius: 999px;
+  background: #85807a; /* 3:1 against the form, so the off state is visible */ cursor: pointer; transition: background-color 150ms ease;
+}
+.mh-switch input::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 150ms ease;
+}
+.mh-switch input:checked { background: var(--mh-teal); }
+.mh-switch input:checked::after { transform: translateX(18px); }
+.mh-switch input:focus-visible { outline: 3px solid var(--mh-teal); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .mh-switch input, .mh-switch input::after { transition: none; } }
 
 /* landing: glance, features, call band */
 .mh-glance { background: var(--mh-cream); padding: 44px 0 52px; }
