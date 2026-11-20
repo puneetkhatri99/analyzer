@@ -59,11 +59,16 @@ def share_known_values(table: str, prefix: str = "") -> None:
                    church_size_source = CASE WHEN t.church_size IS NULL THEN s.church_size_source
                                              ELSE t.church_size_source END,
                    employer_checked_at = s.employer_checked_at
-                FROM (SELECT DISTINCT ON (lower(org_name)) lower(org_name) AS k, denomination, church_size,
+                FROM (SELECT DISTINCT ON (lower(org_name), lower(coalesce(city, '')), lower(coalesce(state, '')))
+                             lower(org_name) AS k, lower(coalesce(city, '')) AS c, lower(coalesce(state, '')) AS st,
+                             denomination, church_size,
                              church_size_source, employer_checked_at
                       FROM public.{table} WHERE employer_checked_at IS NOT NULL AND org_name IS NOT NULL
-                      ORDER BY lower(org_name), church_size IS NULL, employer_checked_at DESC) s
-                WHERE lower(t.org_name) = s.k AND t.employer_checked_at IS NULL AND t.url_key LIKE %s""",
+                      ORDER BY lower(org_name), lower(coalesce(city, '')), lower(coalesce(state, '')),
+                               church_size IS NULL, employer_checked_at DESC) s
+                WHERE lower(t.org_name) = s.k AND lower(coalesce(t.city, '')) = s.c
+                  AND lower(coalesce(t.state, '')) = s.st
+                  AND t.employer_checked_at IS NULL AND t.url_key LIKE %s""",
             (prefix + "%",),
         )
 
@@ -97,8 +102,9 @@ def employers_to_look_up(kind: str, limit: int, prefix: str = "") -> list[tuple]
         return conn.execute(
             f"""SELECT min(org_name), min(org_website), min(city), min(state) FROM public.{table}
                 WHERE employer_checked_at IS NULL AND org_name IS NOT NULL AND url_key LIKE %s {only_churches}
-                GROUP BY lower(org_name) HAVING max(church_size) IS NULL  -- one job with a size is enough
-                ORDER BY count(*) DESC, lower(org_name) LIMIT %s""",
+                GROUP BY lower(org_name), lower(coalesce(city, '')), lower(coalesce(state, ''))
+                HAVING max(church_size) IS NULL  -- one job with a size is enough
+                ORDER BY count(*) DESC, lower(org_name), min(city), min(state) LIMIT %s""",
             (prefix + "%", limit),
         ).fetchall()
 
@@ -112,7 +118,7 @@ def enrich_employers(client: Any, kind: str, limit: int, prefix: str = "") -> in
     log.info("%s: looking up %d employers (weekly attendance, denomination)", table, len(rows))
     done = 0
     for row, (result, failed) in zip(rows, ai_map(lambda r: look_up_church(client, *r), rows), strict=True):
-        name = row[0]
+        name, _, city, state = row
         job, source, notes = result or (None, None, [])
         if failed or (notes and notes[0].startswith(LOOKUP_FAILED)):
             log.warning("%s: lookup failed, will retry next run", name)
@@ -124,8 +130,9 @@ def enrich_employers(client: Any, kind: str, limit: int, prefix: str = "") -> in
                 f"""UPDATE public.{table} SET denomination = coalesce(denomination, %s),
                        church_size_source = CASE WHEN church_size IS NULL THEN %s ELSE church_size_source END,
                        church_size = coalesce(church_size, %s), employer_checked_at = now()
-                    WHERE lower(org_name) = lower(%s)""",
-                (denomination, source if job.church_size else None, job.church_size, name),
+                    WHERE lower(org_name) = lower(%s) AND lower(coalesce(city, '')) = lower(coalesce(%s, ''))
+                      AND lower(coalesce(state, '')) = lower(coalesce(%s, ''))""",
+                (denomination, source if job.church_size else None, job.church_size, name, city, state),
             )
         done += 1
         log.info("%s: %s, %s", name, denomination or "denomination unknown",

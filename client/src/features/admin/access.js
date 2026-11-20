@@ -7,7 +7,6 @@ export const can = (user, role) => ROLES.indexOf(user.role) >= ROLES.indexOf(rol
 // [key, label, lowest role that sees it]
 export const TABS = [
   ["jobs", "Jobs", "viewer"],
-  ["rejected", "Rejected jobs", "viewer"],
   ["add", "Add a job", "editor"],
   ["leads", "Leads", "admin"],
   ["users", "Users", "admin"],
@@ -15,6 +14,7 @@ export const TABS = [
 
 // Opened from the profile menu (the round button top right), not from the tabs: the same shape as TABS.
 export const MENU_SECTIONS = [
+  ["rejected", "Rejected jobs", "viewer"],
   ["settings", "Settings", "admin"],
   ["costs", "AI costs", "admin"],
 ];
