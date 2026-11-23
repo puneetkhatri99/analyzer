@@ -32,12 +32,14 @@ class Lead(BaseModel):
     attendance: str | None = Field(default=None, max_length=100)
     shared: bool = False  # signed up to open a report someone shared with them
     email_report: bool = False  # "Email me this report" was switched on
+    newsletter: bool = False  # "Send me the MinistryHub newsletter" was ticked (crm_sync sends them to Mailchimp)
     report: str = Field(default="", max_length=2000)  # the report's query string: role=…&state=…
 
 
 # What the public site records (features/site/lead.js `track`); "signup" is recorded here, on the server.
 # (Older rows may also hold share_link / share_email: those clicks are now plain "click" events.)
-EventType = Literal["report", "offer", "download", "cta", "click"]
+# "suggest": a denomination the visitor didn't find in the report's list ({"denomination": "..."}).
+EventType = Literal["report", "offer", "download", "cta", "click", "suggest"]
 MERGE_REPORTS_WITHIN = "30 seconds"  # a report right after another replaces it: one search, not a burst of rows
 MAX_DETAILS = 2000  # characters of JSON; an event's details are a few filters or one amount
 
@@ -66,19 +68,23 @@ def save_lead(lead: Lead, tasks: BackgroundTasks) -> dict[str, bool]:
     if is_internal(email):
         return {"ok": True}
     with get_conn() as conn:
+        # The newsletter tick is kept from the first time it's given; leaving it unticked later doesn't take it back
+        # (unsubscribing is done from any newsletter email, in Mailchimp).
         conn.execute(
-            """INSERT INTO public.leads (email, name, organization, role, location, attendance)
-               VALUES (%s, %s, %s, %s, %s, %s)
+            """INSERT INTO public.leads (email, name, organization, role, location, attendance, newsletter_at)
+               VALUES (%s, %s, %s, %s, %s, %s, CASE WHEN %s THEN now() END)
                ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, organization = EXCLUDED.organization,
                  role = EXCLUDED.role, location = EXCLUDED.location, attendance = EXCLUDED.attendance,
-                 last_seen_at = now()""",
-            (email, lead.name.strip(), lead.organization.strip(), lead.role, lead.location, lead.attendance),
-        )
+                 newsletter_at = coalesce(leads.newsletter_at, EXCLUDED.newsletter_at), last_seen_at = now()""",
+            (email, lead.name.strip(), lead.organization.strip(), lead.role, lead.location, lead.attendance,
+             lead.newsletter),
+        )  # fmt: skip
         search = {"role": lead.role, "location": lead.location, "attendance": lead.attendance, "shared": lead.shared}
         conn.execute(
             "INSERT INTO public.lead_events (email, type, details) VALUES (%s, 'signup', %s)",
-            (email, Jsonb({**search, "organization": lead.organization.strip()})),
+            (email, Jsonb({**search, "organization": lead.organization.strip(), "newsletter": lead.newsletter})),
         )
+    log.info("Sign-up stored%s", " (asked for the newsletter)" if lead.newsletter else "")  # never the email
     return {"ok": True}
 
 
@@ -105,6 +111,9 @@ def record_event(event: Event) -> dict[str, bool]:
                SELECT %s, %s, %s WHERE EXISTS (SELECT 1 FROM public.leads WHERE email = %s)""",
             (email, event.type, Jsonb(event.details), email),
         ).rowcount
+        if event.type == "suggest":  # never the email: lead addresses stay out of logs
+            log.info("Denomination suggested (%s): %r", "kept" if added else "not a lead, dropped",
+                     str(event.details.get("denomination"))[:100])  # fmt: skip
         if added and event.type == "report":  # the report that makes a lead hot: noted once, for the daily report
             conn.execute(
                 """UPDATE public.leads SET hot_at = now() WHERE email = %s AND hot_at IS NULL
@@ -176,6 +185,16 @@ def lead_history(email: str) -> dict[str, Any]:
     return {"lead": {**lead, "reports": sum(e["type"] == "report" for e in events)}, "events": events}
 
 
+@admin_router.delete("/leads/{email}")
+def delete_lead(email: str, admin: str = Depends(require_admin)) -> dict[str, bool]:
+    """The lead and all their history (lead_events cascade). Signing up again makes them a new lead."""
+    with get_conn() as conn:
+        if not conn.execute("DELETE FROM public.leads WHERE email = %s", (normalize_email(email),)).rowcount:
+            raise HTTPException(404, "No lead with that email")
+    log.info("Lead deleted by %s", admin)  # never the lead's email
+    return {"ok": True}
+
+
 # ---- Settings: who gets the daily lead report ----------------------------------------------------------------
 
 MAX_RECIPIENTS = 10
@@ -189,7 +208,7 @@ def _settings() -> dict[str, Any]:
     return {
         "hot_lead_emails": daily_report.get_recipients(),
         "email_ready": daily_report.email_ready(),
-        # Resend's shared test sender only delivers to the Resend account's own address
+        # Resend's shared test sender only delivers to the Resend account's own address (EMAIL.md)
         "test_sender": "@resend.dev" in (get_settings().alert_from_email or ""),
     }
 
@@ -220,7 +239,7 @@ def send_test_report(admin: str = Depends(require_admin)) -> dict[str, Any]:
     if not recipients:
         raise HTTPException(400, "Add at least one address and save first.")
     if not daily_report.email_ready():
-        raise HTTPException(400, "Email sending isn't set up: RESEND_API_KEY and ALERT_FROM_EMAIL are needed.")
+        raise HTTPException(400, "Email sending isn't set up: SMTP_HOST and ALERT_FROM_EMAIL are needed (EMAIL.md).")
     today, _ = daily_report.eastern_now()
     try:
         daily_report.send_report(today - timedelta(days=1))

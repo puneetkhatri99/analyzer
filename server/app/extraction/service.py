@@ -7,7 +7,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.ai_usage.service import BudgetReached, ensure_budget, record
+from app.ai_usage.service import MODEL, BudgetReached, ensure_budget, record
 from app.core.config import get_settings
 from app.extraction.page import read_page
 from app.extraction.prompts import CHURCH_PROMPT, FENCE_RE, INJECTION_RE, INSTRUCTIONS, WEB_SEARCH_PROMPT
@@ -25,6 +25,7 @@ class ExtractionError(Exception):
 
 
 MAX_FIGURE_AGE = 8  # years: older attendance figures say little about a church today
+RETRY_SIZE_AFTER_DAYS = 90  # a church whose size wasn't found online is looked up again after this (client's choice)
 LOOKUP_FAILED = "Church size lookup failed"  # starts the note when the search itself broke (retry later)
 
 
@@ -44,7 +45,7 @@ def lookup_church(
     client: Any, job: JobExtraction, url: str = "", admin_email: str | None = None
 ) -> tuple[JobExtraction, str | None, list[str]]:
     """Fill a missing church size (and denomination) by web search. Returns the job, the source URL, and notes."""
-    model = get_settings().openai_model
+    model = MODEL
     place = ", ".join(p for p in (job.city, job.state) if p)
     prompt = CHURCH_PROMPT.format(
         org=job.org_name,
@@ -78,9 +79,9 @@ def lookup_church(
         return (
             job,
             None,
-            ["Church size isn't stated in the posting, and no source online states the church's attendance."],
+            ["Church size isn't stated in the posting, and no source online states the church's size."],
         )
-    log.info("Church size lookup for %s: %s weekly, from %s", job.org_name, f"{facts.church_size:,}", source)
+    log.info("Church size lookup for %s: %s, from %s", job.org_name, f"{facts.church_size:,}", source)
     update: dict[str, Any] = {"church_size": facts.church_size}
     quote = re.sub(r"[\x00-\x1f<>]", " ", facts.evidence or "")[:200]
     notes = [
@@ -89,9 +90,7 @@ def lookup_church(
         + ". Check it."
     ]
     if facts.church_size > 5000:
-        notes.append(
-            "That is a very large church. Make sure the figure is weekly attendance, not a yearly total or membership."
-        )
+        notes.append("That is a very large church. Make sure the figure isn't a yearly attendance total.")
     return job.model_copy(update=update), source, notes
 
 
@@ -133,10 +132,8 @@ def extract(url: str, admin_email: str) -> dict[str, Any]:
         request = {"input": WEB_SEARCH_PROMPT.format(url=url), "tools": [{"type": "web_search"}], "max_tool_calls": 4}
     client = OpenAI(api_key=settings.openai_api_key)
     try:
-        result = client.responses.parse(
-            model=settings.openai_model, instructions=INSTRUCTIONS, text_format=JobExtraction, **request
-        )
-        record(result, purpose="extract", url=url, model=settings.openai_model, admin_email=admin_email)
+        result = client.responses.parse(model=MODEL, instructions=INSTRUCTIONS, text_format=JobExtraction, **request)
+        record(result, purpose="extract", url=url, model=MODEL, admin_email=admin_email)
     except Exception as e:  # network, quota, invalid key...
         log.exception("AI extraction failed for %s", url)
         raise ExtractionError(502, f"The AI service failed: {e.__class__.__name__}") from e

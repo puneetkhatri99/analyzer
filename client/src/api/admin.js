@@ -17,6 +17,7 @@ export const deleteJob = (source, id) => del(`/api/admin/jobs?${toQuery({ source
 export const fetchJobContact = (source, id) => getJSON(`/api/admin/jobs/contact?${toQuery({ source, id })}`);
 // rejected feed postings: out of every view and figure, and skipped when the feed sends them again
 export const rejectJob = (id, reason) => postJSON("/api/admin/jobs/reject", { id, reason });
+export const setEmployerFacts = (source, id, facts) => patchJSON("/api/admin/employer", { source, id, ...facts });
 export const fetchRejected = () => getJSON("/api/admin/rejected");
 export const restoreRejected = (id) => postJSON("/api/admin/rejected/restore", { id });
 
@@ -43,6 +44,7 @@ export const deleteMatchingCostCalls = (filters) => postJSON("/api/admin/costs/c
 // leads (visitors who signed up for a report)
 export const fetchLeads = () => getJSON("/api/admin/leads");
 export const fetchLeadHistory = (email) => getJSON(`/api/admin/leads/${encodeURIComponent(email)}`);
+export const deleteLead = (email) => del(`/api/admin/leads/${encodeURIComponent(email)}`);
 
 // settings (who gets the daily lead report)
 export const fetchSettings = () => getJSON("/api/admin/settings");

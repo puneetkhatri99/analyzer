@@ -69,12 +69,13 @@ def fake_ai(monkeypatch):
             review = PostingReview(
                 employer_type="other", listed_employer_is_hiring=True, keep=False,
                 exclude_reason="A cafe on Church Street, not a church", salary_min=15, salary_max=None,
-                salary_period="hour",
+                salary_period="hour", role="Other",
             )  # fmt: skip
         else:  # a church job; "Search Group" postings are listed by a search firm on the church's behalf
             review = PostingReview(
                 employer_type="church", listed_employer_is_hiring="Search Group" not in kw["input"], keep=True,
                 exclude_reason=None, salary_min=52000, salary_max=60000, salary_period="year",
+                role="Youth & Student",
             )  # fmt: skip
         return SimpleNamespace(output_parsed=review)
 
@@ -83,8 +84,9 @@ def fake_ai(monkeypatch):
     monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
     monkeypatch.setattr(get_settings(), "enrich_max_per_run", 5)
     only_test = df.CHURCHES_TO_ENRICH.replace(
-        "WHERE c.enriched_at", "WHERE c.company_uuid LIKE 'test-feed-%%' AND c.enriched_at"
+        "WHERE c.company_name", "WHERE c.company_uuid LIKE 'test-feed-%%' AND c.company_name"
     )
+    assert only_test != df.CHURCHES_TO_ENRICH  # or the test would look up (and change) real churches
     monkeypatch.setattr(df, "CHURCHES_TO_ENRICH", only_test)
     return calls
 
@@ -146,6 +148,9 @@ def test_new_postings_are_loaded_and_unreviewed_ones_reviewed(clean, fake_ai, mo
     assert fake_ai.church == 3 and not any("Cafe" in i for i in fake_ai.churches)
     assert s["test-feed-p3"][4:] == (350, "https://church.example.invalid/about")
     assert status["run_id"].startswith("feed-") and status["calls"] == 0  # the fake calls have no usage
+    with get_conn() as conn:  # the AI's role is kept beside the posting; the cafe's went with it to rejected_postings
+        roles = dict(conn.execute("SELECT post_uuid, ai_role FROM public.postings WHERE post_uuid LIKE 'test-feed-%'"))
+    assert roles == {f"test-feed-p{n}": "Youth & Student" for n in (1, 2, 3)}
 
 
 def test_go_betweens_unparsed_feed_pay_and_unreviewed_postings(clean, fake_ai, monkeypatch):
@@ -250,6 +255,21 @@ def test_runs_once_a_day_unless_forced(clean, fake_ai, monkeypatch):
     assert len(seen) == 2
 
 
+def test_a_church_without_a_size_is_looked_up_again_after_90_days(clean, fake_ai):
+    with get_conn() as conn:
+        for n in (1, 2, 3):
+            load_posting(conn, job(n), "2026-11-04")
+        days = {1: df.RETRY_SIZE_AFTER_DAYS + 10, 2: 10, 3: df.RETRY_SIZE_AFTER_DAYS + 10}
+        for n, ago in days.items():  # 1: missed long ago; 2: missed recently; 3: found long ago
+            conn.execute(
+                "UPDATE public.companies SET employer_type = 'church', enriched_at = now() - make_interval(days => %s),"
+                " church_size = %s WHERE company_uuid = %s",
+                (ago, 800 if n == 3 else None, f"test-feed-c{n}"),
+            )
+    assert df.enrich_churches(df.OpenAI(api_key="x"), 10) == 1  # fake_ai made OpenAI return its fake client
+    assert fake_ai.church == 1 and "First Baptist Church 1" in fake_ai.churches[0]
+
+
 def test_expired_link_alerts_the_admin_once_and_changes_nothing(clean, monkeypatch):
     sent = []
     monkeypatch.setattr(df, "get_recipients", lambda: ["a@example.invalid"])
@@ -346,3 +366,16 @@ def test_parallel_ai_calls_keep_the_run_id_and_order():
     assert [r for r, _ in got] == [(1, "feed-parallel-test"), (2, "feed-parallel-test"), None,
                                     (4, "feed-parallel-test"), (5, "feed-parallel-test")]  # fmt: skip
     assert got[2][1].startswith("TimeoutError")
+
+
+def test_odd_entries_in_the_feed_are_ignored_not_fatal(monkeypatch):
+    class Reply:
+        ok, status_code = True, 200
+
+        @staticmethod
+        def json():
+            return [None, "x", 5, [], {"post_uuid": ["a"]}, {"post_uuid": "ok-1", "post_url": 5}]
+
+    monkeypatch.setattr(df, "get_public", lambda url, **kw: Reply())
+    assert df.download("https://feed.example/x") == [{"post_uuid": "ok-1", "post_url": 5}]
+    assert df._url({"post_url": 5}) == "5"  # a non-text address no longer breaks the "seen before" check

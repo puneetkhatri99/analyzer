@@ -11,7 +11,7 @@ import PayCard from "./components/PayCard.jsx";
 import PrintReport from "./components/PrintReport.jsx";
 import ReportHeader from "./components/ReportHeader.jsx";
 import RefinePanel from "./components/refine/RefinePanel.jsx";
-import WidenedNote from "./components/WidenedNote.jsx";
+import MergedNote from "./components/MergedNote.jsx";
 import { PART_TIME } from "./lib/filters.js";
 import { useReport } from "./hooks/useReport.js";
 import { useReportOptions } from "./hooks/useReportOptions.js";
@@ -19,7 +19,7 @@ import { useReportOptions } from "./hooks/useReportOptions.js";
 function ReportBody({ r, roleText, typeLabel }) {
   return (
     <>
-      {r.note && r.pay && <WidenedNote note={r.note} />}
+      {r.merged?.length > 0 && r.pay && <MergedNote merged={r.merged} />}
       <PayCard r={r} typeLabel={typeLabel} />
       {r.pay && <OfferCheck key={`${r.unit}-${r.pay.typical}`} r={r} />}
       <MarketStats r={r} roleText={roleText} />
@@ -54,7 +54,7 @@ export default function ReportPage() {
   const roleText = r ? r.title.role : "these";
   const typeLabel = filters.type === PART_TIME ? "part-time" : "full-time";
   return (
-    <PublicLayout after={r && <PrintReport r={r} lead={lead} roleText={roleText} typeLabel={typeLabel} />}>
+    <PublicLayout after={r && <PrintReport r={r} roleText={roleText} typeLabel={typeLabel} />}>
       <div className="mh-wrap mh-report">
         <ReportHeader r={r} />
         <div className="mh-report-grid">

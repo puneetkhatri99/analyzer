@@ -17,13 +17,13 @@ from typing import Any
 
 from openai import OpenAI
 
-from app.ai_usage.service import budget, ensure_budget, record
+from app.ai_usage.service import MODEL, budget, ensure_budget, record
 from app.core.config import get_settings
 from app.core.db import get_conn
 from app.core.logs import script_log
 from app.extraction.prompts import INSTRUCTIONS, WEB_SEARCH_PROMPT
 from app.extraction.schemas import JobExtraction
-from app.extraction.service import LOOKUP_FAILED
+from app.extraction.service import LOOKUP_FAILED, RETRY_SIZE_AFTER_DAYS
 from app.extraction.validation import validate
 from app.ingestion import daily_feed
 from app.ingestion.daily_feed import ai_map, look_up_church
@@ -96,15 +96,21 @@ def name_denominations(table: str, prefix: str = "") -> int:
 
 
 def employers_to_look_up(kind: str, limit: int, prefix: str = "") -> list[tuple]:
+    """(name, website, city, state, last looked up) per employer without a size: never looked up first, then those
+    last looked up RETRY_SIZE_AFTER_DAYS ago or more (oldest first)."""
     table = BIZDEV_TABLES[kind]
     only_churches = "" if kind == "churches" else f"AND org_name ~* '{CHURCH_NAME}'"
     with get_conn() as conn:
         return conn.execute(
-            f"""SELECT min(org_name), min(org_website), min(city), min(state) FROM public.{table}
-                WHERE employer_checked_at IS NULL AND org_name IS NOT NULL AND url_key LIKE %s {only_churches}
+            f"""SELECT min(org_name), min(org_website), min(city), min(state), max(employer_checked_at)
+                FROM public.{table}
+                WHERE org_name IS NOT NULL AND url_key LIKE %s {only_churches}
                 GROUP BY lower(org_name), lower(coalesce(city, '')), lower(coalesce(state, ''))
                 HAVING max(church_size) IS NULL  -- one job with a size is enough
-                ORDER BY count(*) DESC, lower(org_name), min(city), min(state) LIMIT %s""",
+                   AND (max(employer_checked_at) IS NULL
+                        OR max(employer_checked_at) < now() - interval '{RETRY_SIZE_AFTER_DAYS} days')
+                ORDER BY max(employer_checked_at) NULLS FIRST, count(*) DESC, lower(org_name), min(city), min(state)
+                LIMIT %s""",
             (prefix + "%", limit),
         ).fetchall()
 
@@ -115,10 +121,14 @@ def enrich_employers(client: Any, kind: str, limit: int, prefix: str = "") -> in
     share_known_values(table, prefix)
     name_denominations(table, prefix)
     rows = employers_to_look_up(kind, limit, prefix)
-    log.info("%s: looking up %d employers (weekly attendance, denomination)", table, len(rows))
+    retries = sum(1 for r in rows if r[4] is not None)
+    log.info("%s: looking up %d employers (size, denomination); %d are retries after %d+ days without a size",
+             table, len(rows), retries, RETRY_SIZE_AFTER_DAYS)  # fmt: skip
     done = 0
-    for row, (result, failed) in zip(rows, ai_map(lambda r: look_up_church(client, *r), rows), strict=True):
-        name, _, city, state = row
+    for row, (result, failed) in zip(rows, ai_map(lambda r: look_up_church(client, *r[:4]), rows), strict=True):
+        name, _, city, state, last = row
+        if last is not None:
+            log.info("%s: retry, last looked up %s without a size", name, f"{last:%Y-%m-%d}")
         job, source, notes = result or (None, None, [])
         if failed or (notes and notes[0].startswith(LOOKUP_FAILED)):
             log.warning("%s: lookup failed, will retry next run", name)
@@ -136,7 +146,7 @@ def enrich_employers(client: Any, kind: str, limit: int, prefix: str = "") -> in
             )
         done += 1
         log.info("%s: %s, %s", name, denomination or "denomination unknown",
-                 f"{job.church_size:,} weekly" if job.church_size else "attendance not found online")  # fmt: skip
+                 f"size {job.church_size:,}" if job.church_size else "size not found online")  # fmt: skip
     return done
 
 
@@ -160,7 +170,7 @@ def same_employer(asked: str | None, found: str | None) -> bool:
 def read_job(client: Any, row: tuple) -> JobExtraction | None:
     """One web-search read of a job whose page can't be fetched. None when it isn't the sheet's job."""
     _, url, _, org = row
-    model = get_settings().openai_model
+    model = MODEL
     ensure_budget()
     response = client.responses.parse(
         model=model, instructions=INSTRUCTIONS, input=WEB_SEARCH_PROMPT.format(url=url), text_format=JobExtraction,

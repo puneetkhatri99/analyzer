@@ -1,0 +1,53 @@
+# EC2 deployment: the app image (API + built dashboard) and its own Postgres. nginx runs on the host and proxies to
+# 127.0.0.1:8080 (deploy/nginx.conf). Steps: DEPLOY_EC2.md.
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ministry_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ministry_jobs
+    volumes:
+      - pgdata:/var/lib/postgresql # Postgres 18 keeps its data in a version folder under here
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ministry_app -d ministry_jobs"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: &logs
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    # No "ports": the database is reachable only from the app, never from the internet.
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://ministry_app:${POSTGRES_PASSWORD}@db:5432/ministry_jobs
+      APP_ENV: production
+    ports:
+      - "127.0.0.1:8080:8080" # only nginx on this machine can reach it (the app trusts X-Forwarded-For from it)
+    volumes:
+      - ./logs:/home/user/app/server/logs # the app's own log files (the container user has uid 1000)
+      - ./secrets:/run/secrets:ro # the Google key file for private sheets (DEPLOY_EC2.md); read-only, never in git
+    # Migrations first. MIGRATE_UP_TO (in .env) holds back newer ones; empty = apply all.
+    command:
+      - sh
+      - -c
+      - >-
+        python -m app.cli migrate $${MIGRATE_UP_TO:+--up-to $$MIGRATE_UP_TO} &&
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --proxy-headers --forwarded-allow-ips='*'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    logging: *logs
+
+volumes:
+  pgdata:

@@ -64,6 +64,11 @@ runs it now. It runs on the API's own timer (production only, from `FEED_HOUR_UT
 a sleeping free Render service catches up when it wakes. A failed download retries the next day and emails the
 daily-report addresses. Code: `server/app/ingestion/bizdev_sync.py`.
 
+*Private sheets.* A sheet no one else can open can be shared, as a **Viewer**, with the app's own Google account. The
+server asks Google for read-only access, so it can download the sheet but never change it. On EC2 that account is a key
+file named by `GOOGLE_APPLICATION_CREDENTIALS` (steps: [DEPLOY_EC2.md](DEPLOY_EC2.md), "Private Google Sheets"). On
+Cloud Run it is the service's built-in account and needs no key. Without either, the plain link is used, as before.
+
 **AI fill-in for the BizDev jobs** (`bizdev_enrich.py`, `python -m app.cli bizdev-enrich [--limit N]`). The sheets hold no pay,
 church size or denomination, and most job links (SimplyHired) block page reads, so once a day, after the sync, up to
 `ENRICH_MAX_PER_RUN` (50) per sheet are filled in: the denomination from the employer's name (free); church size and
@@ -77,6 +82,27 @@ UTC calendar month, estimated from `ai_usage`). At the limit, all four places th
 the church lookup, the BizDev pay search, and "Add a job", which answers 429) until the next month or until the limit is
 raised or removed; the daily-report addresses are emailed when a run is paused. No limit is set until an admin sets one.
 Calls already running can overshoot by a few cents. Code: `ensure_budget()` in `server/app/ai_usage/service.py`.
+
+**Roles** (`server/app/jobs/roles.py`). A job's role comes from its title (the brief's role list plus the extras the
+client chose). When the title only reaches a catch-all group (Other, Director/Coordinator, Pastor/Minister (other)), the
+role the AI picked from the whole posting is used instead (`postings.ai_role`, asked in the daily review). The AI never
+moves a job into the hidden Healthcare/Counseling group. `python -m app.cli classify-roles --estimate` prices the
+one-off catch-up for feed postings reviewed before this existed; without `--estimate` it runs it.
+
+**One opening, counted once** (`server/app/report/reposts.py`). Before any public figure, copies of one job are merged:
+the same link in the same state, or the same employer, title, state and city posted within 90 days of each other
+(employers and titles compared as cleaned-up word sets). `python -m app.cli check-duplicates` logs every merged group,
+the role counts, the denomination names merged (`job_pages/parser.py` `DENOMINATIONS`) and jobs hidden for a
+placeholder or missing employer; the daily feed run logs the same at its end.
+
+**Church size**: a stated size, weekly attendance first, else membership (never staff counts or estimates). Churches
+whose size wasn't found are looked up again after 90 days. Editors can type a size and denomination in a job's detail
+dialog; it applies to every job of that employer and is logged.
+
+**Newsletter sync** (`server/app/leads/crm_sync.py`): once a week, sign-ups who ticked "Send me the MinistryHub
+newsletter" go to Mailchimp with their activity (tags and a note). Off until `MAILCHIMP_API_KEY` and
+`MAILCHIMP_LIST_ID` are set. `python -m app.cli crm-sync --dry-run` shows what would be sent. Loxo waits for the
+client's Loxo API docs.
 
 **Collecting new church jobs automatically** (from `server/`). Finds new US church jobs on the sites that allow it and adds
 them to the BizDev churches tab as "Auto-collected". [COLLECTOR_HOW_IT_WORKS.md](COLLECTOR_HOW_IT_WORKS.md) explains how; [COLLECTOR_GAPS.md](COLLECTOR_GAPS.md) lists what it leaves out. Safe to run daily:
@@ -167,7 +193,6 @@ Set in `server/.env` locally and in Render's environment settings in production:
 | Variable | Purpose |
 |---|---|
 | `OPENAI_API_KEY` | Enables extraction |
-| `OPENAI_MODEL` | Optional; default `gpt-5.4-mini` |
 
 ## Deploy
 

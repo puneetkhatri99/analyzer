@@ -6,7 +6,7 @@ export default function MarketGlance({ landing: l }) {
   const stats = [
     [l?.typical ? money(l.typical) : "…", "Median pay across all ministry roles nationwide"],
     [l?.low ? `${moneyShort(l.low)}–${moneyShort(l.high)}` : "…", "What the middle half of ministry roles pay"],
-    [l?.attendance && `${count(l.attendance)}+`, "Typical weekly attendance of churches hiring"],
+    [l?.attendance && `${count(l.attendance)}+`, "Typical size of churches hiring"],
   ].filter(([value]) => value);
   return (
     <section className="mh-glance">

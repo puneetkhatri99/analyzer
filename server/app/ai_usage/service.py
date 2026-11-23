@@ -9,13 +9,12 @@ from typing import Any
 
 from psycopg.rows import dict_row
 
-from app.core.config import get_settings
 from app.core.db import get_conn
 from app.core.settings_store import delete_setting, get_setting, set_setting
 from app.shared.web import with_scheme
 
 # List prices in USD: per 1M tokens (input, cached input, output), and per web search call.
-# shortcut: prices are hard-coded; update them here when OpenAI changes its prices or OPENAI_MODEL changes.
+# shortcut: prices are hard-coded; update them here when OpenAI changes its prices or MODEL changes.
 # Prices as listed in Nov 2026 (developers.openai.com model pages; GPT-5.4 / 5.5 from third-party price trackers).
 PRICES = {
     "gpt-5.4-nano": (0.20, 0.02, 1.25),
@@ -24,12 +23,15 @@ PRICES = {
     "gpt-5.5": (5.00, 0.50, 30.00),
 }
 WEB_SEARCH_PRICE = 0.01
+MODEL = "gpt-5.4-mini"  # the one model every AI call uses; to change it, edit this line and its price above
 
 # What one call of each kind uses on average: (input tokens, of which cached, output tokens, web searches), to price
 # the same work on another model. Measured on gpt-5.4-mini in Nov 2026, except posting_review (an estimate: one
-# posting's text and no search). costs_report replaces a profile with the live average once a purpose has 5+ calls.
+# posting's text and no search) and role_review (an estimate: the same text, a one-word answer). costs_report
+# replaces a profile with the live average once a purpose has 5+ calls.
 PROFILES = {
     "posting_review": (2000, 0, 150, 0),
+    "role_review": (2000, 0, 30, 0),
     "church_lookup": (10638, 2402, 239, 1.66),
     "bizdev_pay": (6978, 4147, 199, 1.0),
 }
@@ -183,7 +185,7 @@ def costs_report() -> dict[str, Any]:
         purpose = m.pop("purpose")
         profiles[purpose] = {**{k: float(v) for k, v in m.items()}, "measured": True}
     pricing = {
-        "model": get_settings().openai_model,
+        "model": MODEL,
         "web_search": WEB_SEARCH_PRICE,
         "models": {name: dict(zip(("input", "cached", "output"), p, strict=True)) for name, p in PRICES.items()},
         "profiles": profiles,

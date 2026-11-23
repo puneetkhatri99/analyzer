@@ -26,6 +26,36 @@ function RejectForm({ onReject }) {
   );
 }
 
+// An editor fills in what the AI couldn't find (brief: "manually work through ones without church size"). It applies to
+// every job of this employer; an empty box leaves that value as it is.
+function EmployerFactsForm({ job, onSave }) {
+  const [size, setSize] = useState("");
+  const [denomination, setDenomination] = useState("");
+  const [error, setError] = useState(null);
+  const save = (e) => {
+    e.preventDefault();
+    const facts = {};
+    if (size.trim()) facts.church_size = Number(size);
+    if (denomination.trim()) facts.denomination = denomination.trim();
+    if (!Object.keys(facts).length) return setError("Enter a church size, a denomination, or both.");
+    onSave(facts).catch((err) => setError(err.message));
+  };
+  return (
+    <section>
+      <h3>Fill in the employer</h3>
+      <p className="muted small">Saved for every job of {job.company_name || "this employer"}. Leave a box empty to keep its value.</p>
+      <form className="mt-2 flex flex-wrap gap-2" onSubmit={save}>
+        <Input aria-label="Church size" placeholder="Church size, e.g. 450" type="number" min={1} max={100000}
+          className="w-44" value={size} onChange={(e) => setSize(e.target.value)} />
+        <Input aria-label="Denomination" placeholder="Denomination" className="min-w-0 flex-1" maxLength={80}
+          value={denomination} onChange={(e) => setDenomination(e.target.value)} />
+        <Button type="submit" variant="outline" size="sm">Save</Button>
+      </form>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </section>
+  );
+}
+
 // The person to contact about a BizDev job, from the sheet. Only editors and admins get onContact; the job lists never carry it.
 function Contact({ onContact }) {
   const [contact, setContact] = useState(undefined); // undefined = loading
@@ -52,7 +82,7 @@ function Contact({ onContact }) {
 // onDelete and onReject are given only to users who may change jobs (editors and admins); they return promises.
 // onContact (editors and admins, BizDev jobs only) loads the person to contact. returnFocus puts focus back on the
 // job's row once the dialog has closed.
-export default function JobDetail({ job, onClose, onDelete, onReject, onContact, returnFocus }) {
+export default function JobDetail({ job, onClose, onDelete, onReject, onContact, onSetFacts, returnFocus }) {
   const [deleteError, setDeleteError] = useState(null);
 
   const pay = listedPay(job);
@@ -71,10 +101,11 @@ export default function JobDetail({ job, onClose, onDelete, onReject, onContact,
       ["Denomination", job.denomination],
       ["Church size", job.church_size != null ? (
         <>
-          {count(job.church_size)}+ weekly attendance
+          {count(job.church_size)}+
           {/^https?:\/\//i.test(job.church_size_source || "") && (
             <> · <a href={job.church_size_source} target="_blank" rel="noopener noreferrer">found online</a></>
           )}
+          {/^entered by /.test(job.church_size_source || "") && <> · {job.church_size_source}</>}
         </>
       ) : null],
     ]],
@@ -116,6 +147,7 @@ export default function JobDetail({ job, onClose, onDelete, onReject, onContact,
             </dl>
           </section>
         ))}
+        {onSetFacts && <EmployerFactsForm job={job} onSave={onSetFacts} />}
         {onContact && <Contact onContact={onContact} />}
         {job.source === "json" && onReject && <RejectForm onReject={onReject} />}
 

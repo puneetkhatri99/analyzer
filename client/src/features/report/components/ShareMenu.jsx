@@ -10,7 +10,7 @@ export default function ShareMenu({ r }) {
   const [copied, setCopied] = useState(false);
   if (!r) return <Button type="button" className="mh-btn mh-btn-outline" disabled><Share2 className="size-4" aria-hidden="true" />Share</Button>;
 
-  const { url, mailto } = shareLinks(window.location.href, `${r.title.role} pay in ${r.title.area}`);
+  const { url, mailto } = shareLinks(window.location.href, `${r.covers.role} pay in ${r.covers.area}`);
   const copy = () => {
     navigator.clipboard.writeText(url)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })

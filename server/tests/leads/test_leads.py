@@ -61,6 +61,14 @@ def test_lead_history(client, make_user, sign_in):
         row = next(x for x in admin.get("/api/admin/leads").json()["leads"] if x["email"] == email)
         assert row["events"] == 3 and row["last_active"] and row["booked"] is True and row["hot_at"] is None
         assert admin.get("/api/admin/leads/nobody@example.invalid").status_code == 404
+
+        # deleting takes the lead and all their events
+        assert client.delete(f"/api/admin/leads/{email}").status_code == 401
+        assert admin.delete(f"/api/admin/leads/{email.upper()}").status_code == 200
+        assert admin.get(f"/api/admin/leads/{email}").status_code == 404
+        with get_conn() as conn:
+            assert conn.execute("SELECT count(*) FROM public.lead_events WHERE email = %s", (email,)).fetchone()[0] == 0
+        assert admin.delete(f"/api/admin/leads/{email}").status_code == 404
     finally:
         with get_conn() as conn:
             conn.execute("DELETE FROM public.leads WHERE email = %s", (email,))  # its events go too (cascade)

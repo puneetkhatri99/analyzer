@@ -1,5 +1,5 @@
 """The daily lead report: settings, the cron command's once-a-day rule, and failures that must be retried.
-Resend is never called: requests.post is replaced."""
+No mail server is called: smtplib is replaced."""
 
 from datetime import timedelta
 
@@ -52,7 +52,7 @@ def test_hot_at_is_set_on_the_third_report(client):
             conn.execute("DELETE FROM public.leads WHERE email = %s", (LEAD,))
 
 
-def test_cron_sends_once_from_8am_retries_a_failure_and_catches_up(client, monkeypatch, resend, saved_settings):
+def test_cron_sends_once_from_8am_retries_a_failure_and_catches_up(client, monkeypatch, outbox, saved_settings):
     try:
         client.post("/api/leads", json={"name": "Dana Daily", "email": LEAD, "organization": "Daily Church"})
         with get_conn() as conn:  # hot since noon yesterday, New York time
@@ -67,34 +67,34 @@ def test_cron_sends_once_from_8am_retries_a_failure_and_catches_up(client, monke
             conn.execute("DELETE FROM public.app_settings WHERE key = %s", (dr.SENT_FOR,))
 
         monkeypatch.setattr(dr, "eastern_now", lambda: (today, 7))
-        assert main(["daily-report"]) == 0 and resend.sent == []  # 7 AM: not yet
+        assert main(["daily-report"]) == 0 and outbox.sent == []  # 7 AM: not yet
 
         monkeypatch.setattr(dr, "eastern_now", lambda: (today, 8))
-        resend.fail = True
-        assert main(["daily-report"]) == 1  # Resend refused: the day stays unsent, so the next run retries
+        outbox.fail = True
+        assert main(["daily-report"]) == 1  # The mail server refused: the day stays unsent, so the next run retries
         assert dr.get_setting(dr.SENT_FOR) is None
 
-        resend.fail, resend.sent = False, []
+        outbox.fail, outbox.sent = False, []
         monkeypatch.setattr(dr, "eastern_now", lambda: (today, 9))  # the retry run
         assert main(["daily-report"]) == 0
-        assert len(resend.sent) == 1 and resend.sent[0]["to"] == ["team@example.invalid"]
-        assert "Dana Daily, Daily Church" in resend.sent[0]["text"]
+        assert len(outbox.sent) == 1 and outbox.sent[0]["to"] == ["team@example.invalid"]
+        assert "Dana Daily, Daily Church" in outbox.sent[0]["text"]
         assert dr.get_setting(dr.SENT_FOR) == str(today.fromordinal(today.toordinal() - 1))
-        assert main(["daily-report"]) == 0 and len(resend.sent) == 1  # another check the same day: already sent
+        assert main(["daily-report"]) == 0 and len(outbox.sent) == 1  # another check the same day: already sent
         monkeypatch.setattr(dr, "eastern_now", lambda: (today, 15))
-        assert main(["daily-report"]) == 0 and len(resend.sent) == 1  # later that day: still sent once
+        assert main(["daily-report"]) == 0 and len(outbox.sent) == 1  # later that day: still sent once
 
         # the server slept through two mornings: both missed days go out, oldest first, then nothing more
         monkeypatch.setattr(dr, "eastern_now", lambda: (today + timedelta(days=2), 14))
-        assert main(["daily-report"]) == 0 and len(resend.sent) == 3
+        assert main(["daily-report"]) == 0 and len(outbox.sent) == 3
         assert dr.get_setting(dr.SENT_FOR) == str(today + timedelta(days=1))
-        assert main(["daily-report"]) == 0 and len(resend.sent) == 3
+        assert main(["daily-report"]) == 0 and len(outbox.sent) == 3
 
         # re-sending an old day by hand, or a future one, leaves the marker alone: no catch-up storm, no skipped days
-        assert main(["daily-report", "--day", str(today - timedelta(days=20))]) == 0 and len(resend.sent) == 4
-        assert main(["daily-report", "--day", str(today + timedelta(days=30))]) == 0 and len(resend.sent) == 5
+        assert main(["daily-report", "--day", str(today - timedelta(days=20))]) == 0 and len(outbox.sent) == 4
+        assert main(["daily-report", "--day", str(today + timedelta(days=30))]) == 0 and len(outbox.sent) == 5
         assert dr.get_setting(dr.SENT_FOR) == str(today + timedelta(days=1))
-        assert main(["daily-report"]) == 0 and len(resend.sent) == 5
+        assert main(["daily-report"]) == 0 and len(outbox.sent) == 5
     finally:
         with get_conn() as conn:
             conn.execute("DELETE FROM public.leads WHERE email = %s", (LEAD,))
@@ -109,6 +109,28 @@ def test_a_day_without_hot_leads_still_reports(monkeypatch):
     subject, text = dr.render(dr.report_data(date(2026, 11, 16)))
     assert subject == "MinistryHub daily leads: 0 new hot leads (Nov 16)"
     assert "No new hot leads that day." in text and "New sign-ups: 2" in text
+
+
+def test_a_denomination_a_visitor_couldnt_find_reaches_their_history_and_the_daily_email(client, make_user, sign_in):
+    make_user(ADMIN, "a-strong-pass-1")
+    try:
+        assert (
+            client.post("/api/leads", json={"name": "Sue", "email": LEAD, "organization": "Grace"}).status_code == 200
+        )
+        suggest = {"email": LEAD, "type": "suggest", "details": {"denomination": "Anglican Church in North America"}}
+        assert client.post("/api/leads/events", json=suggest).status_code == 200
+        admin, _ = sign_in(ADMIN, "a-strong-pass-1")
+        events = admin.get(f"/api/admin/leads/{LEAD}").json()["events"]
+        assert (
+            events[0]["type"] == "suggest"
+            and events[0]["details"]["denomination"] == "Anglican Church in North America"
+        )
+        _, text = dr.render(dr.report_data(dr.eastern_now()[0]))  # today's report: the suggestion was made today
+        assert "Denominations visitors couldn't find in the list:" in text
+        assert "'Anglican Church in North America' from Sue, Grace" in text
+    finally:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM public.leads WHERE email = %s", (LEAD,))
 
 
 def test_an_odd_offer_from_the_public_site_never_breaks_the_email():

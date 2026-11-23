@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Download } from "lucide-react";
-import { fetchLeads } from "@/api/admin.js";
+import { deleteLead, fetchLeads } from "@/api/admin.js";
 import SimpleTable from "@/components/SimpleTable.jsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -100,6 +100,8 @@ export default function LeadsPage() {
   const [sort, setSort] = useState("newest");
   const [open, setOpen] = useState(null); // the email whose history is showing
   useEffect(() => { fetchLeads().then(setData).catch((e) => setError(`Couldn’t load leads (${e.message})`)); }, []);
+  // reloaded after a delete, so the totals and top lists drop the lead too
+  const removeLead = (email) => deleteLead(email).then(() => { setOpen(null); return fetchLeads().then(setData); });
 
   const shown = useMemo(() => filterLeads(data?.leads || [], filters).sort(SORTS[sort][1]), [data, filters, sort]);
   const setFilter = (key) => (value) => setFilters((f) => ({ ...f, [key]: value?.target ? value.target.value : value }));
@@ -148,7 +150,7 @@ export default function LeadsPage() {
         <SimpleTable columns={columns(setOpen)} rows={shown} rowKey={(l) => l.email}
           empty={filtered ? "No leads match these filters." : "No one has signed up yet."} />
       </Card>
-      <LeadHistory email={open} onClose={() => setOpen(null)} />
+      <LeadHistory email={open} onClose={() => setOpen(null)} onDelete={removeLead} />
     </>
   );
 }

@@ -36,18 +36,17 @@ EMPLOYMENT_TYPES = {
 }  # fmt: skip
 REMOTE_RE = re.compile(r"\b(fully remote|100% remote|remote position|work from home|remote-first)\b", re.I)
 
-# Matched against the organisation name, then a labelled field. Names follow the JSON feed's labels.
+# Matched against the organisation name, then a labelled field; also maps stored values to today's names (the job
+# lists read every stored denomination through denomination_in). Families merge as the client chose: Southern
+# Baptist is Baptist, United Methodist is Methodist, Missouri Synod is Lutheran, and the spellings of one body are one.
 DENOMINATIONS = [
     (re.compile(pattern, re.I), name)
     for pattern, name in [
-        (r"southern baptist|\bsbc\b", "Southern Baptist"),
-        (r"\bbaptist", "Baptist"),
+        (r"\bbaptist|\bsbc\b", "Baptist"),
         (r"roman catholic|\bcatholic", "Catholic"),
         (r"\bpresbyterian|\bpc\(usa\)|\bpca\b", "Presbyterian"),
-        (r"missouri synod|\blcms\b", "Lutheran Church-Missouri Synod"),
-        (r"\blutheran|\belca\b", "Lutheran"),
-        (r"united methodist|\bumc\b", "United Methodist"),
-        (r"\bmethodist", "Methodist"),
+        (r"\blutheran|\belca\b|missouri synod|\blcms\b", "Lutheran"),
+        (r"\bmethodist|\bumc\b", "Methodist"),
         (r"\bepiscopal|\banglican", "Episcopal"),
         (r"assembl(y|ies) of god", "Assemblies of God"),
         (r"calvary chapel", "Calvary Chapel"),
@@ -56,6 +55,13 @@ DENOMINATIONS = [
         (r"salvation army", "Salvation Army"),
         (r"evangelical free|\befca\b", "Evangelical Free"),
         (r"christian and missionary alliance|\bc&ma\b", "Christian and Missionary Alliance"),
+        (r"evangelical covenant", "Evangelical Covenant"),
+        (
+            r"independent christian church|christian church(es)? \([^)]*independent\)|"
+            r"christian churches and churches of christ",
+            "Independent Christian Church",
+        ),
+        (r"\bquaker|friends southwest", "Friends (Quaker)"),
         (r"united church of christ|\bucc\b", "United Church of Christ"),
         (r"church of christ", "Church of Christ"),
         (r"\bwesleyan", "Wesleyan Church"),

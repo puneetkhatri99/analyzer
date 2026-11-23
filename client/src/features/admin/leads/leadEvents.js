@@ -29,6 +29,8 @@ export function describe({ type, details: d = {} }) {
       return [`Went to MinistryHub: “${d.label || "a link"}”`, d.url];
     case "click":
       return [`Clicked “${d.label}”`, d.page === "/report" ? "on the report" : d.page === "/" ? "on the landing page" : d.page];
+    case "suggest":
+      return ["Couldn't find their denomination", `Suggested “${d.denomination || ""}”`];
     default:
       return [type, ""];
   }

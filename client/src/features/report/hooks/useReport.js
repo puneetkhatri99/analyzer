@@ -27,6 +27,13 @@ export function useReport() {
         if (id !== latest.current) return;
         setReport(r);
         setError(null);
+        // a link made when the report had four sizes and single denominations: carry the server's current values
+        const now = { size: r.filters.size, denomination: r.filters.denomination };
+        if (JSON.stringify(now) !== JSON.stringify({ size: filters.size, denomination: filters.denomination })) {
+          setDraft((d) => ({ ...d, ...now }));
+          setFilters((f) => ({ ...f, ...now }));
+          return;
+        }
         const chosen = Object.fromEntries(Object.entries(filters).filter(([, v]) => v?.length));
         track("report", { ...chosen, trigger, shown: `${r.title.role} in ${r.title.area}`, widened_to: r.scope === "state" ? null : r.area_name });
       })

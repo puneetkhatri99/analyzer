@@ -17,16 +17,25 @@ class Settings(BaseSettings):
 
     # Admin panel: AI extraction of jobs from any URL.
     openai_api_key: str | None = None
-    openai_model: str = "gpt-5.4-mini"
 
     # "production" on Render (render.yaml). With an Axiom token there, logs go to Axiom only, not to files.
     app_env: str = "local"
 
-    # The daily lead report (app/leads/daily_report.py), sent through Resend. ALERT_FROM_EMAIL must be on a domain
-    # verified in Resend, e.g. "MinistryHub Leads <alerts@ministryhub.org>". SITE_URL links the email to the admin.
+    # Outgoing email (app/shared/email.py, EMAIL.md): any SMTP server. ALERT_FROM_EMAIL must be an address the server
+    # may send from, e.g. "MinistryHub Leads <alerts@ministryhub.org>". SITE_URL links the emails to the admin.
+    # Port 465 = SSL, any other (587) = STARTTLS. resend_api_key is the older setting, used only if SMTP_HOST is empty.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
     resend_api_key: str | None = None
     alert_from_email: str | None = None
     site_url: str = "http://localhost:5173"
+
+    # The weekly newsletter sync (app/leads/crm_sync.py). Off until both are set. The key ends in its data centre
+    # ("…-us21"); the list ID is the audience's ID (Mailchimp: Audience → Settings → Audience name and defaults).
+    mailchimp_api_key: str | None = None
+    mailchimp_list_id: str | None = None
 
     # Sign-ups from these email domains (the team testing the site) aren't stored as leads. Comma-separated.
     ignored_lead_domains: str = "ministryhub.org"

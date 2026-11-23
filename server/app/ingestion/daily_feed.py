@@ -26,7 +26,7 @@ from urllib.parse import parse_qs, urlsplit
 import requests
 from openai import OpenAI
 
-from app.ai_usage.service import budget, current_run, ensure_budget, record
+from app.ai_usage.service import MODEL, budget, current_run, ensure_budget, record
 from app.core.config import get_settings
 from app.core.db import get_conn
 from app.core.logs import script_log
@@ -34,12 +34,14 @@ from app.core.settings_store import delete_setting, get_setting, set_setting
 from app.extraction.page import page_text
 from app.extraction.prompts import FENCE_RE, INJECTION_RE, REVIEW_INSTRUCTIONS
 from app.extraction.schemas import JobExtraction, PostingReview
-from app.extraction.service import LOOKUP_FAILED, lookup_church
+from app.extraction.service import LOOKUP_FAILED, RETRY_SIZE_AFTER_DAYS, lookup_church
 from app.extraction.validation import complete_pay, found_on_page, validate
 from app.ingestion.feed import load_posting
 from app.job_pages.parser import denomination_in
 from app.jobs.repository import reject_posting
+from app.jobs.roles import bucket_role, pick_role
 from app.leads.daily_report import get_recipients
+from app.report.data_check import log_data_check
 from app.shared.email import EmailError, email_ready, send_email
 from app.shared.web import UnsafeURLError, get_public
 
@@ -141,7 +143,14 @@ def download(url: str) -> list[dict[str, Any]]:
         raise FeedError("The feed isn't JSON") from e
     if not isinstance(jobs, list):
         raise FeedError("The feed isn't a list of postings")
-    return jobs
+    usable = [j for j in jobs if isinstance(j, dict) and isinstance(j.get("post_uuid"), str)]
+    if len(usable) < len(jobs):  # one null or odd entry must not stop the whole day's run
+        log.warning(
+            "Feed: %d of %d entries are not postings (no text post_uuid) and were ignored",
+            len(jobs) - len(usable),
+            len(jobs),
+        )
+    return usable
 
 
 # ---- telling the admin ----------------------------------------------------------------------------------------
@@ -182,7 +191,7 @@ def warn_if_near_expiry(url: str) -> None:
 
 
 def _url(job: dict[str, Any]) -> str:
-    return (job.get("post_url") or "").strip().lower()  # the whole URL: many job boards differ only in the query
+    return str(job.get("post_url") or "").strip().lower()  # the whole URL: many job boards differ only in the query
 
 
 def new_postings(jobs: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
@@ -233,23 +242,36 @@ SAVE_PAY = """UPDATE public.postings
     WHERE post_uuid = %s AND salary_min IS NULL"""
 
 
-def ask_review(client: Any, job: dict[str, Any]) -> PostingReview:
-    """One AI call: is this feed posting in scope, what kind of employer, and what pay does it state."""
-    model = get_settings().openai_model
+def ask_about_posting[T](client: Any, job: dict[str, Any], instructions: str, answer: type[T], purpose: str) -> T:
+    """One AI call about one feed posting: its listed employer, title, URL and text (fenced as untrusted)."""
+    model = MODEL
     page = FENCE_RE.sub(" ", page_text(job.get("post_html") or "") or "")[:MAX_POST_CHARS]
     url = job.get("post_url") or ""
     ensure_budget()
     response = client.responses.parse(
         model=model,
-        instructions=REVIEW_INSTRUCTIONS,
+        instructions=instructions,
         input=f"Employer, as the feed lists it: {job.get('company_name')}\nTitle: {job.get('job_name')}\nURL: {url}\n\n"
         f"<untrusted_page>\n{page}\n</untrusted_page>",
-        text_format=PostingReview,
+        text_format=answer,
     )
-    record(response, purpose="posting_review", url=url, model=model, admin_email=None)
+    record(response, purpose=purpose, url=url, model=model, admin_email=None)
     if response.output_parsed is None:  # a refusal or an empty answer: count it as a failed call, retried next run
-        raise ValueError("The AI gave no review")
+        raise ValueError("The AI gave no answer")
     return response.output_parsed
+
+
+def ask_review(client: Any, job: dict[str, Any]) -> PostingReview:
+    """Is this feed posting in scope, what kind of employer, what pay does it state, and what role is it."""
+    return ask_about_posting(client, job, REVIEW_INSTRUCTIONS, PostingReview, "posting_review")
+
+
+def log_role(post_uuid: str, title: str | None, ai_role: str | None) -> None:
+    """Every AI role answer, beside the title's own role and the one the report will use (roles.pick_role)."""
+    log.info(
+        "Role for %s %r: title says %s, AI says %s, using %s",
+        post_uuid, title, bucket_role(title), ai_role, pick_role(title, ai_role),
+    )  # fmt: skip
 
 
 AI_WORKERS = 4  # AI calls at once: each mostly waits on OpenAI, so 4 at a time makes a run about 4x shorter
@@ -302,9 +324,9 @@ def review_postings(client: Any, jobs: list[dict[str, Any]], limit: int) -> dict
         try:
             with get_conn() as conn, conn.transaction():
                 judged = conn.execute(
-                    "UPDATE public.postings SET scope_checked_at = now() "
+                    "UPDATE public.postings SET scope_checked_at = now(), ai_role = %s "
                     "WHERE post_uuid = %s AND scope_checked_at IS NULL",
-                    (job["post_uuid"],),
+                    (review.role, job["post_uuid"]),
                 ).rowcount
                 if not judged:  # an admin decided while the AI was reading: the admin's call stands
                     continue
@@ -323,6 +345,7 @@ def review_postings(client: Any, jobs: list[dict[str, Any]], limit: int) -> dict
             log.exception("Saving the review of %s failed", job.get("post_url"))
             note(f"Reviewed {n}/{len(todo)}: {title}: saving failed, will retry next run")
             continue
+        log_role(job["post_uuid"], job.get("job_name"), review.role)
         counts["pay"] += saved_pay
         counts["reviewed"] += 1
         counts["excluded"] += reason is not None
@@ -334,13 +357,17 @@ def review_postings(client: Any, jobs: list[dict[str, Any]], limit: int) -> dict
     return counts
 
 
-CHURCHES_TO_ENRICH = """
-    SELECT c.company_uuid, c.company_name, c.company_url, p.city, p.region
+# Churches never looked up, then (oldest first) those whose size wasn't found RETRY_SIZE_AFTER_DAYS ago or more.
+# Only churches: a size means nothing for a school or a company.
+CHURCHES_TO_ENRICH = f"""
+    SELECT c.company_uuid, c.company_name, c.company_url, p.city, p.region, c.enriched_at
     FROM public.companies c
     LEFT JOIN LATERAL (SELECT city, region FROM public.postings WHERE company_uuid = c.company_uuid
                        ORDER BY first_indexed DESC NULLS LAST LIMIT 1) p ON true
-    WHERE c.enriched_at IS NULL AND c.company_name IS NOT NULL AND c.employer_type = 'church'
-    ORDER BY c.company_name LIMIT %s"""  # only churches: attendance means nothing for a school or a company
+    WHERE c.company_name IS NOT NULL AND c.employer_type = 'church'
+      AND (c.enriched_at IS NULL
+           OR (c.church_size IS NULL AND c.enriched_at < now() - interval '{RETRY_SIZE_AFTER_DAYS} days'))
+    ORDER BY c.enriched_at NULLS FIRST, c.company_name LIMIT %s"""
 NOT_A_CONGREGATION = re.compile(r"\b(arch)?dioces[ae]\b|\bconference\b", re.I)
 
 
@@ -363,13 +390,17 @@ def enrich_churches(client: Any, limit: int) -> int:
     """Denomination and attendance for churches nobody has looked up yet. Returns how many were stamped."""
     with get_conn() as conn:
         rows = conn.execute(CHURCHES_TO_ENRICH, (limit,)).fetchall()
-    model, done = get_settings().openai_model, 0
-    note(f"Looking up {len(rows)} churches (denomination and weekly attendance)", step="Looking up churches")
+    model, done = MODEL, 0
+    retries = sum(1 for r in rows if r[5] is not None)
+    note(f"Looking up {len(rows)} churches (denomination and size; {retries} retried after "
+         f"{RETRY_SIZE_AFTER_DAYS}+ days without a size)", step="Looking up churches")  # fmt: skip
 
     for n, (row, (result, failed)) in enumerate(
-        zip(rows, ai_map(lambda r: look_up_church(client, *r[1:]), rows), strict=True), 1
+        zip(rows, ai_map(lambda r: look_up_church(client, *r[1:5]), rows), strict=True), 1
     ):
         uuid, name = row[0], row[1]
+        if row[5] is not None:
+            log.info("Church %s: retry, last looked up %s without a size", name, f"{row[5]:%Y-%m-%d}")
         job, source, notes = result or (None, None, [])
         if failed or (notes and notes[0].startswith(LOOKUP_FAILED)):
             note(f"Church {n}/{len(rows)}: {name}: the search failed, will retry next run")
@@ -394,7 +425,7 @@ def enrich_churches(client: Any, limit: int) -> int:
             log.exception("Saving the church lookup for %s failed", name)
             continue
         done += 1
-        found = f"{job.church_size:,} weekly" if job.church_size else "attendance not found online"
+        found = f"size {job.church_size:,}" if job.church_size else "size not found online"
         note(f"Church {n}/{len(rows)}: {name}: {job.denomination or 'denomination unknown'}, {found}", church=done)
     return done
 
@@ -462,6 +493,10 @@ def run(*, run_id: str, dry_run: bool = False) -> dict[str, Any]:
     else:
         ai = " OPENAI_API_KEY isn't set, so nothing was enriched."
     status["cost_usd"], status["calls"] = run_cost(run_id)
+    try:  # the daily look at the public data (merged duplicates, roles); only a log, so it never fails the run
+        log_data_check()
+    except Exception:
+        log.exception("The daily data check failed")
     note(f"Done. This run's {status['calls']} AI calls cost about ${status['cost_usd']:.4f}")
     status.update(
         ok=True,

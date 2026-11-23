@@ -5,10 +5,11 @@ import sys
 
 from app.auth import commands as auth_commands
 from app.core import migrations
-from app.ingestion import bizdev, bizdev_enrich, bizdev_sync, daily_feed, push_data
+from app.ingestion import bizdev, bizdev_enrich, bizdev_sync, classify_roles, daily_feed, push_data
 from app.ingestion.collector import run as collector
 from app.job_pages import check
-from app.leads import daily_report
+from app.leads import crm_sync, daily_report
+from app.report import data_check
 
 COMMANDS = (
     migrations,
@@ -21,6 +22,9 @@ COMMANDS = (
     daily_feed,
     bizdev_sync,
     bizdev_enrich,
+    classify_roles,
+    data_check,
+    crm_sync,
 )
 
 

@@ -9,7 +9,7 @@ export default function ReportHeader({ r }) {
     <div className="mh-report-head" data-reveal>
       <div>
         <p className="mh-eyebrow">Market Analysis Report</p>{/* taste-skill-ignore: label in the client's approved design */}
-        <h1>{r ? <>{r.title.role} pay in <span className="mh-underline">{r.title.area}</span></> : "Loading your report…"}</h1>
+        <h1>{r ? <>{r.covers.role} pay in <span className="mh-underline">{r.covers.area}</span></> : "Loading your report…"}</h1>
       </div>
       <div className="mh-report-actions">
         <ShareMenu r={r} />

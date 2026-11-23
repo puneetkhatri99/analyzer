@@ -16,6 +16,7 @@ export function useLeadForm() {
     role: "", location: "", attendance: ANY_SIZE,
     name: lead?.name || "", email: lead?.email || "", organization: lead?.organization || "",
     emailReport: false,
+    newsletter: false, // unticked until the visitor asks: only they can add themselves to the newsletter
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -62,7 +63,7 @@ export function useLeadForm() {
     const search = shared
       ? { role: list(shared.role, 200), location: list(shared.state, 200) || NATIONWIDE, attendance: list(shared.size, 100) }
       : { role: form.role, location: form.location, attendance };
-    postLead({ ...who, ...search, shared: Boolean(next), email_report: form.emailReport, report: reportSearch() })
+    postLead({ ...who, ...search, shared: Boolean(next), email_report: form.emailReport, newsletter: form.newsletter, report: reportSearch() })
       .then(() => { saveLead(who); openReport(); })
       .catch((err) => { setError(err.message); setBusy(false); });
   };

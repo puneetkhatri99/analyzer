@@ -27,7 +27,7 @@ export default function LeadForm({ options }) {
               <FormSelect id="lead-location" label="Location" placeholder="Choose a state" value={form.location} onChange={set("location")}
                 options={[[NATIONWIDE, "Anywhere in the US"], ...pairs(options?.states)]} required invalid={missing.includes("location")} />
             </div>
-            <FormSelect id="lead-attendance" label="Weekly attendance (optional)" value={form.attendance} onChange={set("attendance")}
+            <FormSelect id="lead-attendance" label="Church size (optional)" value={form.attendance} onChange={set("attendance")}
               options={[[ANY_SIZE, "Any size"], ...pairs(options?.sizes)]} />
           </>
         )}
@@ -51,6 +51,10 @@ export default function LeadForm({ options }) {
         <label className="mh-switch">
           <input type="checkbox" role="switch" checked={form.emailReport} onChange={set("emailReport")} />
           <span>Email me this report{lead ? ` (to ${lead.email})` : ""}</span>
+        </label>
+        <label className="mh-switch">
+          <input type="checkbox" checked={form.newsletter} onChange={set("newsletter")} />
+          <span>Send me the MinistryHub newsletter</span>
         </label>
 
         {error && <p className="mh-error" role="alert">{error}</p>}

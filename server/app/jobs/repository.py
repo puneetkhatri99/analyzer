@@ -13,7 +13,8 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from app.core.db import get_conn
-from app.jobs.roles import bucket_role
+from app.job_pages.parser import denomination_in
+from app.jobs.roles import pick_role
 from app.shared.geo import state_name
 from app.shared.web import with_scheme
 
@@ -27,7 +28,7 @@ COLUMNS = [
     "post_uuid", "job_name", "department", "hours", "seniority", "remote",
     "board_source", "post_url", "city", "region", "country", "company_name",
     "denomination", "church_size", "salary_min", "salary_max", "salary_period",
-    "first_indexed", "pull_date", "origin", "added_at", "church_size_source", "reviewed",
+    "first_indexed", "pull_date", "origin", "added_at", "church_size_source", "reviewed", "ai_role",
 ]  # fmt: skip
 
 # Every SELECT names its columns (AS) exactly as COLUMNS, in the same order: rows are read by name, not by position.
@@ -38,7 +39,7 @@ _FEED_SQL = """
            c.company_name, c.denomination, c.church_size,
            p.salary_min, p.salary_max, p.salary_period,
            p.first_indexed, p.pull_date, 'feed' AS origin, p.created_at AS added_at,
-           c.church_size_url AS church_size_source, p.scope_checked_at IS NOT NULL AS reviewed
+           c.church_size_url AS church_size_source, p.scope_checked_at IS NOT NULL AS reviewed, p.ai_role
     FROM public.postings p
     LEFT JOIN public.companies c USING (company_uuid)
 """
@@ -49,7 +50,8 @@ _BIZDEV_SQL = """
            split_part(url_key, '/', 1) AS board_source, job_url AS post_url,
            city, state AS region, 'United States' AS country, org_name AS company_name, denomination, church_size,
            salary_min, salary_max, salary_period, date_posted AS first_indexed, fetched_at::date AS pull_date,
-           added_via AS origin, imported_at AS added_at, church_size_source, true AS reviewed
+           added_via AS origin, imported_at AS added_at, church_size_source, true AS reviewed,
+           NULL::text AS ai_role  -- shortcut: no description is kept for sheet jobs, so their role is the title's
     FROM public.{table}
 """
 
@@ -80,7 +82,9 @@ def load_jobs(source: Source = "json") -> list[dict[str, Any]]:
     jobs = []
     for row in rows:
         d = {c: _json_value(v) for c, v in row.items()}
-        d["role"] = bucket_role(d["job_name"])
+        d["role"] = pick_role(d["job_name"], d["ai_role"])
+        # stored names from before the merges ("Southern Baptist Convention") read as today's ("Baptist")
+        d["denomination"] = denomination_in(d["denomination"]) or d["denomination"]
         lo, hi, period = d["salary_min"], d["salary_max"], d["salary_period"]
         annual = None
         if lo is not None and hi is not None:
@@ -222,6 +226,55 @@ def job_contact(source: BizdevSource, job_id: str) -> dict[str, str | None] | No
             (job_id,),
         ).fetchone()
     return None if row is None else dict(zip(("first_name", "last_name", "title", "email"), row, strict=True))
+
+
+def set_employer_facts(
+    source: Source, job_id: str, church_size: int | None, denomination: str | None, by: str
+) -> dict[str, Any] | None:
+    """An editor's church size and/or denomination for the employer of one job, applied to all of that employer's jobs
+    (feed: the company; sheets: the same name, city and state, as bizdev_enrich matches employers). A value left None
+    stays as it is. The size's source becomes "entered by <email>". Returns the employer and its old values, or None
+    when there is no such job."""
+    entered = f"entered by {by}"
+    with get_conn() as conn, conn.transaction():
+        if source == "json":
+            row = conn.execute(
+                """SELECT c.company_uuid, c.company_name, c.church_size, c.denomination
+                   FROM public.postings p JOIN public.companies c USING (company_uuid) WHERE p.post_uuid = %s""",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            jobs = conn.execute(
+                """UPDATE public.companies SET church_size = coalesce(%(size)s, church_size),
+                       church_size_url = CASE WHEN %(size)s::int IS NULL THEN church_size_url ELSE %(by)s END,
+                       church_size_source = CASE WHEN %(size)s::int IS NULL THEN church_size_source ELSE 'manual' END,
+                       denomination = coalesce(%(denom)s, denomination), enriched_at = coalesce(enriched_at, now())
+                   WHERE company_uuid = %(id)s""",
+                {"size": church_size, "denom": denomination, "by": entered, "id": row[0]},
+            ).rowcount
+        else:
+            table = BIZDEV_TABLES[source]
+            row = conn.execute(
+                f"SELECT url_key, org_name, church_size, denomination, city, state FROM public.{table} "
+                "WHERE url_key = %s",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            jobs = conn.execute(
+                f"""UPDATE public.{table} SET church_size = coalesce(%(size)s, church_size),
+                       church_size_source = CASE WHEN %(size)s::int IS NULL THEN church_size_source ELSE %(by)s END,
+                       denomination = coalesce(%(denom)s, denomination),
+                       employer_checked_at = coalesce(employer_checked_at, now())
+                    WHERE CASE WHEN %(name)s::text IS NULL THEN url_key = %(id)s
+                          ELSE lower(org_name) = lower(%(name)s)
+                               AND lower(coalesce(city, '')) = lower(coalesce(%(city)s, ''))
+                               AND lower(coalesce(state, '')) = lower(coalesce(%(state)s, '')) END""",
+                {"size": church_size, "denom": denomination, "by": entered, "id": row[0], "name": row[1],
+                 "city": row[4], "state": row[5]},
+            ).rowcount  # fmt: skip
+    return {"employer": row[1], "old_size": row[2], "old_denomination": row[3], "jobs": jobs}
 
 
 def delete_job(source: BizdevSource, job_id: str) -> bool:

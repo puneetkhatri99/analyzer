@@ -181,10 +181,27 @@
 .mh-check { display: flex; align-items: center; gap: 12px; font-size: var(--fs-body); cursor: pointer; }
 .mh-check label { font-size: var(--fs-body); line-height: 1.45; cursor: pointer; }
 .mh-show-all { justify-self: start; margin-top: -12px; }
+.mh-suggest { justify-self: start; margin-top: -12px; font-size: var(--fs-small); }
+.mh-suggest-row { display: flex; gap: 10px; align-items: center; }
 
 .mh-note { display: flex; gap: 12px; align-items: flex-start; background: var(--mh-cream); border-radius: 16px; padding: 14px 18px; font-size: var(--fs-body); }
 .mh-note svg { flex: none; margin-top: 2px; }
 .mh-note [data-slot=alert-description] { font-size: var(--fs-body); line-height: 1.55; color: inherit; }
+
+.mh-merged { background: var(--mh-cream); border-radius: 16px; padding: 18px 20px; display: grid; gap: 14px; }
+.mh-merged-head { display: flex; gap: 12px; align-items: flex-start; }
+.mh-merged-head svg { flex: none; margin-top: 3px; color: var(--mh-teal-dark); }
+.mh-merged-head h2 { font-size: var(--fs-lead); font-weight: 800; }
+.mh-merged-head p { margin: 4px 0 0; font-size: var(--fs-body); line-height: 1.5; }
+.mh-merged-list { margin: 0; background: #fff; border-radius: 12px; }
+.mh-merged-row { display: grid; grid-template-columns: 130px 1fr; gap: 4px 16px; align-items: center; padding: 12px 16px; }
+.mh-merged-row + .mh-merged-row { border-top: 1px solid var(--mh-line); }
+.mh-merged-row dt { font-size: var(--fs-small); font-weight: 700; color: var(--mh-teal-dark); }
+.mh-merged-row dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.mh-merged-from { color: var(--mh-muted); }
+.mh-merged-arrow { width: 16px; height: 16px; flex: none; color: var(--mh-teal-dark); }
+.mh-merged-to { background: var(--mh-mint); color: var(--mh-teal-dark); border-radius: 999px; padding: 3px 12px; font-size: var(--fs-small); font-weight: 700; }
+@media (max-width: 520px) { .mh-merged-row { grid-template-columns: 1fr; } }
 
 .mh-pay { background: var(--mh-mint); border-radius: 26px; padding: 28px 24px; display: grid; gap: 22px; }
 @media (min-width: 720px) { .mh-pay { padding: 36px 38px; } }
@@ -197,6 +214,8 @@
 .mh-pay-empty { font-size: var(--fs-lead); }
 .mh-pay-foot { font-size: var(--fs-small); color: var(--mh-teal-dark); }
 .mh-confidence { justify-self: start; display: inline-flex; align-items: center; gap: 8px; background: #fff; border-radius: 999px; padding: 7px 16px; font-size: var(--fs-small); font-weight: 700; color: var(--mh-ink); }
+.mh-pay-badges { display: flex; flex-wrap: wrap; gap: 8px; justify-self: start; }
+.mh-confidence.mh-confidence-merged i { background: var(--mh-yellow); box-shadow: 0 0 0 1.5px var(--mh-ink); }
 .mh-confidence i { width: 9px; height: 9px; border-radius: 50%; background: var(--mh-teal); }
 
 .mh-range { position: relative; height: 62px; margin: 0 4px; }
@@ -227,6 +246,8 @@
 .mh-bars { display: grid; gap: 10px; }
 .mh-bar-row { display: grid; grid-template-columns: minmax(90px, 180px) 1fr auto; gap: 14px; align-items: center; font-size: var(--fs-small); }
 .mh-bar-name { overflow-wrap: break-word; }
+.mh-bar-merged { display: block; font-size: 0.8em; font-weight: 400; color: var(--mh-muted); }
+.mh-bars-legend { margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--mh-line); }
 .mh-bar-track { height: 20px; }
 .mh-bar { display: block; height: 100%; background: var(--mh-bar); border-radius: 6px; min-width: 4px; }
 @media (max-width: 479px) { .mh-wide-only { display: none; } }
@@ -254,30 +275,54 @@
 /* printed report (brief P8): hidden on screen, the only thing printed */
 .mh-print { display: none; }
 @media print {
-  @page { size: letter; margin: 0.4in; }
-  .mh { min-height: 0; display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 12px; }
+  /* Margin 0 also removes the browser's own header and footer (date, page title, address). The two pages below are fixed
+     letter-size sheets with their own padding, so nothing can run past the paper's edge or split across pages. */
+  @page { size: letter; margin: 0; }
+  html, body { background: #fff !important; margin: 0; }
+  .mh { min-height: 0; display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 15px; }
   .mh-screen { display: none; }
   .mh-print * { opacity: 1 !important; transform: none !important; }
-  .mh-print { display: grid; gap: 14px; }
-  .mh-print-head { display: flex; justify-content: space-between; align-items: flex-start; text-align: right; font-size: 12px; font-weight: 600; }
-  .mh-print-head .mh-logo { height: 26px; }
-  .mh-print h1 { font-size: 30px; font-weight: 800; }
-  .mh-print-for { font-size: 15px; color: #333; margin-top: -6px !important; }
-  .mh-print .mh-pay { padding: 20px 24px; gap: 14px; break-inside: avoid; }
-  .mh-print .mh-pay-big { font-size: 44px; }
+  .mh-print { display: block; }
+  .mh-print-page { box-sizing: border-box; width: 100%; height: 10.95in; padding: 0.5in 0.6in; display: flex; flex-direction: column; gap: 18px; overflow: hidden; break-after: page; }
+  .mh-print-page:last-child { break-after: auto; }
+  .mh-print-head { display: flex; justify-content: space-between; align-items: center; text-align: right; font-size: 14px; font-weight: 600; }
+  .mh-print-head .mh-logo { height: 34px; }
+  .mh-print-head p { margin: 0; }
+  .mh-print-head .mh-eyebrow { font-size: 14px; margin-bottom: 2px; }
+  .mh-print h1 { font-size: 40px; line-height: 1.12; font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; margin: 0; }
+  .mh-print h1 .mh-underline { display: inline-block; max-width: 100%; }  /* the place stays together, not split after "the" */
+  .mh-print-merged { font-size: 14px; line-height: 1.45; background: var(--mh-cream); border-radius: 14px; padding: 14px 20px; display: grid; gap: 6px; }
+  .mh-print-merged p { margin: 0; }
+  .mh-print-merged ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .mh-print .mh-pay { padding: 28px 32px; gap: 14px; border-radius: 22px; break-inside: avoid; }
+  .mh-print-page:first-child .mh-pay { flex: 1 1 auto; max-height: 560px; align-content: center; gap: 22px; }  /* a short page 1 gets a hero card, not blank space */
+  .mh-print .mh-pay-label { font-size: 19px; }
+  .mh-print .mh-pay-big { font-size: 76px; }
+  .mh-print .mh-pay-big span { font-size: 24px; }
+  .mh-print .mh-pay-range span { font-size: 16px; }
+  .mh-print .mh-pay-range strong { font-size: 28px; }
+  .mh-print .mh-range-typical-label, .mh-print .mh-range-q { font-size: 15px; }
   .mh-print .mh-pay-foot, .mh-print .mh-confidence { display: none; }
-  .mh-print .mh-stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-  .mh-print .mh-stat { padding: 14px !important; }
-  .mh-print .mh-stat strong { font-size: 22px; }
-  .mh-print .mh-stat p, .mh-print .mh-stat h3 { font-size: 11px; }
-  .mh-print-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; break-inside: avoid; }
-  .mh-print .mh-card { padding: 16px 18px; gap: 10px; }
-  .mh-print .mh-card h2 { font-size: 15px; }
-  .mh-print .mh-bar-row { grid-template-columns: 90px 1fr auto; gap: 8px; font-size: 11px; }
-  .mh-print .mh-bar-track { grid-column: auto; grid-row: auto; height: 12px; }
+  .mh-print .mh-stats { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+  .mh-print .mh-card { padding: 22px 26px; gap: 12px; border-radius: 18px; break-inside: avoid; }
+  .mh-print .mh-stat { padding: 22px 26px !important; gap: 8px; }
+  .mh-print .mh-stat h3 { font-size: 15px; }
+  .mh-print .mh-stat strong { font-size: 40px; }
+  .mh-print .mh-stat p { font-size: 15px; line-height: 1.4; }
+  .mh-print .mh-card h2 { font-size: 22px; }
+  .mh-print-cols { display: grid; gap: 18px; }
+  .mh-print .mh-bar-row { gap: 12px; font-size: 14px; line-height: 1.25; break-inside: avoid; }
+  .mh-print .mh-bar-track { grid-column: auto; grid-row: auto; height: 16px; }
   .mh-print .mh-bar-value { min-width: 0; }
-  .mh-print-note { font-size: 10.5px; color: var(--mh-muted); }
-  .mh-print-foot { background: #000; color: #fff; display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-radius: 12px; margin-top: 4px; text-align: right; font-size: 12px; }
-  .mh-print-foot .mh-logo { height: 20px; }
-  .mh-print-foot strong { color: var(--mh-yellow); }
+  .mh-print .mh-bar-merged { font-size: 11px; }
+  .mh-print .mh-bars { row-gap: 7px; }
+  .mh-print .mh-bar-row { grid-template-columns: 210px 1fr 76px; }  /* roles: one wide column, bars with room */
+  .mh-print-cols .mh-card:nth-child(2) .mh-bars { grid-template-columns: 1fr 1fr; column-gap: 36px; }  /* church sizes: 2 x 2 */
+  .mh-print-cols .mh-card:nth-child(2) .mh-bar-row { grid-template-columns: 116px 1fr 72px; }
+  .mh-print .mh-bars-legend { display: none; }  /* said once in the footnote instead */
+  .mh-print-note { font-size: 12px; line-height: 1.5; color: var(--mh-muted); margin: 0; }
+  .mh-print-foot { margin-top: auto; background: #000; color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 22px 28px; border-radius: 16px; text-align: right; font-size: 15px; }
+  .mh-print-foot p { margin: 0; }
+  .mh-print-foot .mh-logo { height: 26px; }
+  .mh-print-foot strong { color: var(--mh-yellow); font-size: 16px; }
 }

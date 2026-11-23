@@ -24,7 +24,10 @@ def with_scheme(url: str) -> str:
 
 def url_key(url: str) -> str:
     """A job's identity across sources: its URL without scheme, www, query or trailing slash."""
-    p = urlsplit(url.strip().lower())
+    try:
+        p = urlsplit(url.strip().lower())
+    except ValueError:  # a malformed address ("http://[x") in a sheet or feed: its own text is its identity, and one
+        return url.strip().lower()  # bad row must not stop a whole import or daily run
     return p.netloc.removeprefix("www.") + p.path.rstrip("/")
 
 

@@ -1,5 +1,6 @@
 """daily-report: email yesterday's new hot leads, and the day's other numbers, to the addresses set in
-Admin → Settings. Sent through Resend, by the API's own timer (start_scheduler) or a cron job (DAILY_REPORT_CRON.md).
+Admin → Settings. Sent by email (EMAIL.md), by the API's own timer (start_scheduler) or a cron job
+(DAILY_REPORT_CRON.md).
 
   python -m app.cli daily-report                    # from 8 AM New York time: every day not sent yet, once each
   python -m app.cli daily-report --force            # send yesterday's report now
@@ -84,7 +85,15 @@ def report_data(day: date) -> dict[str, Any]:
                    (SELECT count(*) FROM public.leads WHERE hot_at IS NOT NULL) AS hot_total""",
             params,
         ).fetchone()
-    return {"day": day, "hot": hot, **numbers}
+        suggested = cur.execute(
+            _WINDOW
+            + """
+            SELECT l.name, l.organization, e.details->>'denomination' AS denomination
+            FROM public.lead_events e JOIN public.leads l USING (email), w
+            WHERE e.type = 'suggest' AND e.created_at >= w.s AND e.created_at < w.e ORDER BY e.created_at""",
+            params,
+        ).fetchall()
+    return {"day": day, "hot": hot, "suggested": suggested, **numbers}
 
 
 def _offer(o: dict[str, Any]) -> str:
@@ -116,6 +125,10 @@ def render(data: dict[str, Any]) -> tuple[str, str]:
             lines.append("")
     else:
         lines += ["No new hot leads that day.", ""]
+    if suggested := data.get("suggested"):
+        lines += ["Denominations visitors couldn't find in the list:", ""]
+        lines += [f"- {(s['denomination'] or '')[:100]!r} from {s['name']}, {s['organization']}" for s in suggested]
+        lines.append("")
     lines += [
         "The day in numbers:",
         f"  New sign-ups: {data['signups']}",
@@ -153,7 +166,7 @@ def _send(day: date) -> int:
         log.error("Not sent: no addresses in Admin → Settings → Daily lead report")
         return 1
     if not email_ready():
-        log.error("Not sent: RESEND_API_KEY and ALERT_FROM_EMAIL must both be set")
+        log.error("Not sent: SMTP_HOST and ALERT_FROM_EMAIL must both be set (EMAIL.md)")
         return 1
     try:
         n = send_report(day)
@@ -174,8 +187,8 @@ CATCH_UP_DAYS = 7  # a server asleep for longer than this sends only the last we
 
 def send_if_due() -> int:
     """From 8 AM in New York: every report not sent yet, oldest first, up to yesterday. A day missed while the server
-    was asleep (or Resend was down) is sent late, not lost; at most CATCH_UP_DAYS back. Used by the cron command and
-    by the API's own timer (start_scheduler)."""
+    was asleep (or the mail server was down) is sent late, not lost; at most CATCH_UP_DAYS back. Used by the cron
+    command and by the API's own timer (start_scheduler)."""
     today, hour = eastern_now()
     yesterday = today - timedelta(days=1)
     if hour < SEND_FROM_HOUR:

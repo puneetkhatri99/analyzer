@@ -34,3 +34,7 @@ services:
         sync: false   # sender on a domain verified in Resend, e.g. MinistryHub <reports@ministryhub.org>
       - key: OPENAI_API_KEY
         sync: false   # Admin → Add job reads job pages with AI
+      - key: MAILCHIMP_API_KEY
+        sync: false   # weekly newsletter sync of sign-ups who ticked the box (server/app/leads/crm_sync.py); off if unset
+      - key: MAILCHIMP_LIST_ID
+        sync: false   # the Mailchimp audience's ID

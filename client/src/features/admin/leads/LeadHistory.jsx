@@ -1,18 +1,23 @@
 import React, { useEffect, useState } from "react";
 import { fetchLeadHistory } from "@/api/admin.js";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import Confirm from "@/components/Confirm.jsx";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { longDate, when } from "@/lib/format.js";
 import { describe } from "./leadEvents.js";
 import HotBadge from "./HotBadge.jsx";
 
 // One lead's full history, newest first: sign-ups, reports viewed, offers checked, shares, downloads, clicks.
-export default function LeadHistory({ email, onClose }) {
+// onDelete(email) removes the lead and their history; it returns a promise.
+export default function LeadHistory({ email, onClose, onDelete }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
   useEffect(() => {
     setData(null);
     setError(null);
+    setDeleteError(null);
     if (email) fetchLeadHistory(email).then(setData).catch((e) => setError(`Couldn’t load the history (${e.message})`));
   }, [email]);
 
@@ -42,6 +47,16 @@ export default function LeadHistory({ email, onClose }) {
             })}
           </ol>
         ) : <p className="empty-line">No activity recorded yet. History starts from 17 November 2026.</p>)}
+        {lead && (
+          <DialogFooter>
+            <Confirm title={`Delete ${lead.name}?`} action="Delete lead"
+              description="Their details and all their activity are removed for good. If they're on the newsletter, unsubscribe them in Mailchimp too."
+              onConfirm={() => onDelete(lead.email).catch((e) => setDeleteError(e.message))}>
+              <Button variant="outline" className="border-[#f0c4c6] text-destructive hover:border-destructive hover:bg-[#fdf2f2] hover:text-destructive">Delete lead</Button>
+            </Confirm>
+          </DialogFooter>
+        )}
+        {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
       </DialogContent>
     </Dialog>
   );

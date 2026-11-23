@@ -2,7 +2,7 @@
 couldn't be read are searched for pay, a result for another employer is ignored, and nothing is paid for twice.
 OpenAI is replaced; test rows are removed afterwards."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -113,6 +113,16 @@ def test_a_denomination_in_the_name_is_free_and_without_a_key_nothing_is_paid(cl
     monkeypatch.setattr(be, "share_known_values", lambda table: None)
     result = be.run()
     assert result["skipped"] and rows()["1"][0] == "Baptist" and ai.church == 0 and not ai.jobs
+
+
+def test_an_employer_without_a_size_is_looked_up_again_after_90_days(clean, ai):
+    long_ago = datetime.now(UTC) - timedelta(days=be.RETRY_SIZE_AFTER_DAYS + 10)
+    add(1, org="Zzz Old Miss Church", employer_checked_at=long_ago)  # found nothing 100 days ago: tried again
+    add(2, org="Zzz Recent Miss Church", employer_checked_at=datetime.now(UTC) - timedelta(days=10))
+    add(3, org="Zzz Found Church", church_size=500, employer_checked_at=long_ago)  # has a size: never again
+    assert [r[0] for r in be.employers_to_look_up("churches", 50, KEY)] == ["Zzz Old Miss Church"]
+    be.enrich_employers(ai.client, "churches", 50, KEY)
+    assert ai.church == 1 and rows()["1"][1] == 350
 
 
 def test_a_size_from_the_job_page_keeps_its_own_source(clean, ai):

@@ -171,7 +171,7 @@ def test_validate_clears_bad_values():
         "youth pastor, grace church",
     )
     assert (
-        job.denomination == "Southern Baptist"
+        job.denomination == "Baptist"  # the client merged Southern Baptist into Baptist
         and any("Job title" in w for w in warnings)
         and any("pay figure" in w for w in warnings)
     )

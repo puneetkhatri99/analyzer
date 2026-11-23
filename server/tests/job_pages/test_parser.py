@@ -26,8 +26,29 @@ def test_church_size_and_label():
         "<p>Grace Church Denomination Baptist -- SBC Church/Company Size 1001 to 1500 Job Type Full Time</p>",
         "Grace Church",
     )
-    assert p["church_size"] == 1001 and p["denomination"] == "Southern Baptist"
+    assert p["church_size"] == 1001 and p["denomination"] == "Baptist"  # the client merged Southern Baptist in
     assert parse_page("<p>Our sidebar mentions Presbyterian news</p>", "Grace Church")["denomination"] is None
+
+
+def test_one_name_per_denomination():
+    """The merges the client chose, applied to names found in the data."""
+    same = {
+        "Baptist": ["Southern Baptist", "Southern Baptist Convention", "Baptist -- SBC"],
+        "Methodist": ["United Methodist", "Grace UMC"],
+        "Catholic": ["Roman Catholic"],
+        "Salvation Army": ["Evangelical (The Salvation Army)", "The Salvation Army"],
+        "Lutheran": ["Lutheran Church-Missouri Synod", "Trinity Lutheran (LCMS)"],
+        "Evangelical Covenant": ["Evangelical Covenant Church"],
+        "Independent Christian Church": [
+            "Independent Christian Churches", "Christian Church (Independent)",
+            "Christian Church (disciples/independent)", "Christian churches and churches of Christ",
+        ],
+        "Friends (Quaker)": ["Friends Southwest"],
+    }  # fmt: skip
+    for name, values in same.items():
+        for value in [name, *values]:
+            assert denomination_in(value) == name, value
+    assert denomination_in("Church of God in Christ") is None and denomination_in("Friends of the Homeless") is None
 
 
 def test_dioceses_and_parishes_of_other_churches_are_not_catholic():

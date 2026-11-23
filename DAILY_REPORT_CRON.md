@@ -48,6 +48,9 @@ See every lead and their history: https://<your-site>/admin#leads
 
 ## 1. Set up Resend (once)
 
+> The app sends through any SMTP server; Resend is the first provider. Other providers and the full settings are in
+> [EMAIL.md](EMAIL.md).
+
 Resend sends the email. The free plan allows 3,000 emails a month, far more than one a day needs.
 
 1. Sign up at [resend.com](https://resend.com).
@@ -65,7 +68,8 @@ to the email address that owns the Resend account.
 | Variable | Example | Needed by |
 |---|---|---|
 | `DATABASE_URL` | the Neon `-pooler` connection string | web service, cron job |
-| `RESEND_API_KEY` | `re_…` (keep secret) | web service (for the test button), cron job |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Resend: `smtp.resend.com`, `465`, `resend`, `re_…` (keep secret). Other providers: [EMAIL.md](EMAIL.md) | web service (for the test button), cron job |
+| `RESEND_API_KEY` | old setting, still works alone when `SMTP_HOST` is empty | web service, cron job |
 | `ALERT_FROM_EMAIL` | `MinistryHub Leads <alerts@mail.ministryhub.org>` | web service, cron job |
 | `SITE_URL` | `https://analyzer-e3u1.onrender.com` | cron job (the link in the email) |
 | `APP_ENV` | `production` | cron job (with `AXIOM_TOKEN`: logs go to Axiom only) |

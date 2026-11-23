@@ -29,6 +29,23 @@ REGIONS = {
 }
 REGION_OF = {STATES[code]: region for region, codes in REGIONS.items() for code in codes.split()}
 
+# States that share a border line (corner-only touches like Four Corners excluded). Used to widen a thin state search to
+# the states around it before the whole region; Alaska and Hawaii have none.
+_BORDERS = {
+    "AL": "FL GA MS TN", "AZ": "CA NM NV UT", "AR": "LA MO MS OK TN TX", "CA": "AZ NV OR", "CO": "KS NE NM OK UT WY",
+    "CT": "MA NY RI", "DE": "MD NJ PA", "DC": "MD VA", "FL": "AL GA", "GA": "AL FL NC SC TN", "ID": "MT NV OR UT WA WY",
+    "IL": "IN IA KY MO WI", "IN": "IL KY MI OH", "IA": "IL MN MO NE SD WI", "KS": "CO MO NE OK",
+    "KY": "IL IN MO OH TN VA WV", "LA": "AR MS TX", "ME": "NH", "MD": "DE DC PA VA WV", "MA": "CT NH NY RI VT",
+    "MI": "IN OH WI", "MN": "IA ND SD WI", "MS": "AL AR LA TN", "MO": "AR IL IA KS KY NE OK TN",
+    "MT": "ID ND SD WY", "NE": "CO IA KS MO SD WY", "NV": "AZ CA ID OR UT", "NH": "MA ME VT", "NJ": "DE NY PA",
+    "NM": "AZ CO OK TX", "NY": "CT MA NJ PA VT", "NC": "GA SC TN VA", "ND": "MN MT SD", "OH": "IN KY MI PA WV",
+    "OK": "AR CO KS MO NM TX", "OR": "CA ID NV WA", "PA": "DE MD NJ NY OH WV", "RI": "CT MA", "SC": "GA NC",
+    "SD": "IA MN MT ND NE WY", "TN": "AL AR GA KY MS MO NC VA", "TX": "AR LA NM OK", "UT": "AZ CO ID NV WY",
+    "VT": "MA NH NY", "VA": "DC KY MD NC TN WV", "WA": "ID OR", "WV": "KY MD OH PA VA", "WI": "IL IA MI MN",
+    "WY": "CO ID MT NE SD UT",
+}  # fmt: skip
+NEIGHBOURS = {STATES[c]: frozenset(STATES[n] for n in ns.split()) for c, ns in _BORDERS.items()}
+
 US_NAMES = {"us", "usa", "u.s.", "u.s.a.", "united states", "united states of america"}
 
 _STATE_NAMES = {name.lower(): name for name in STATES.values()}

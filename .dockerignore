@@ -1,5 +1,6 @@
 .git
-.env
+**/.env
+secrets
 **/node_modules
 client/dist
 server/logs

@@ -7,11 +7,14 @@ job URL; a value the sheet leaves blank never erases one already saved (see impo
   python -m app.cli bizdev-sync --force     # both, now
 
 A link can be a Google Sheets share link (it is turned into an .xlsx download) or any https link that serves an .xlsx
-file. Only counts are logged and shown: the sheets' contact names and emails never are.
+file. A private Google Sheet works too once it is shared, as Viewer, with the server's own Google account (a key file
+on EC2, see DEPLOY_EC2.md; read-only, see google_account). Only counts are logged and shown: the sheets' contact names
+and emails never are.
 """
 
 import argparse
 import logging
+import os
 import re
 import tempfile
 import threading
@@ -20,7 +23,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import google.auth
 import requests
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request
 
 from app.ai_usage.service import current_run
 from app.core.config import get_settings
@@ -42,6 +48,10 @@ TRIED_KEY = "bizdev_sync_tried_on"  # the last day a run was tried, so a failure
 CHECK_EVERY = 15 * 60
 MAX_BYTES = 50 * 1024 * 1024
 GOOGLE_SHEET = re.compile(r"^https://docs\.google\.com/spreadsheets/d/([\w-]+)")
+# The server's own Google account asks for a read-only token: it can download a sheet, never change one.
+DRIVE_READ_ONLY = "https://www.googleapis.com/auth/drive.readonly"
+DRIVE_FILES = "https://www.googleapis.com/drive/v3/files"
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 _running = threading.Lock()
 
@@ -71,22 +81,65 @@ def safe_link(link: str | None) -> str | None:
     return f"{p.scheme}://{p.netloc}{p.path}"
 
 
-def fetch(link: str, dest: Path) -> None:
-    """Save the workbook at `link` to `dest`, or raise SyncError."""
+def google_account() -> tuple[str, str] | None:
+    """(email, read-only token) of the server's own Google account, or None when it has none. On EC2 the account is
+    the key file GOOGLE_APPLICATION_CREDENTIALS names; on Cloud Run it is the service's built-in one."""
     try:
-        r = get_public(download_url(link), timeout=(10, 120))
-    except UnsafeURLError as e:
-        raise SyncError(str(e)) from e
-    except requests.RequestException as e:
-        raise SyncError(f"Couldn't reach the link ({e.__class__.__name__})") from e
+        creds, _ = google.auth.default(scopes=[DRIVE_READ_ONLY])
+        creds.refresh(Request())
+    except GoogleAuthError as e:
+        if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):  # a key file was meant to be used: say why it wasn't
+            log.warning("Google key file not usable (%s): only sheets shared with anyone can be read", e)
+        return None
+    return getattr(creds, "service_account_email", None) or "the app's Google account", creds.token
+
+
+def drive_download(file_id: str, email: str, token: str) -> requests.Response | None:
+    """A sheet shared with the server's account, through Google Drive: a Google Sheet is exported as .xlsx, an
+    uploaded .xlsx is downloaded as it is. None when Drive refuses it (then the link itself is tried).
+    shortcut: Drive exports stop at 10 MB (the sheets are about 1 MB); download the file directly if they outgrow it."""
+    auth = {"Authorization": f"Bearer {token}"}
+    url = f"{DRIVE_FILES}/{file_id}"
+    try:
+        r = requests.get(url, params={"fields": "mimeType", "supportsAllDrives": "true"}, headers=auth, timeout=30)
+        if r.ok and r.json().get("mimeType") == "application/vnd.google-apps.spreadsheet":
+            r = requests.get(f"{url}/export", params={"mimeType": XLSX}, headers=auth, timeout=(10, 120))
+        elif r.ok:
+            r = requests.get(url, params={"alt": "media", "supportsAllDrives": "true"}, headers=auth, timeout=(10, 120))
+    except (requests.RequestException, ValueError) as e:
+        log.warning("Google Drive unreachable as %s (%s): trying the link itself", email, e.__class__.__name__)
+        return None
+    if not r.ok:
+        log.warning("Google Drive refused the sheet as %s (%d %s): trying the link itself", email, r.status_code,
+                    r.text[:300])  # fmt: skip
+        return None
+    log.info("Sheet read through Google Drive as %s", email)
+    return r
+
+
+def fetch(link: str, dest: Path) -> None:
+    """Save the workbook at `link` to `dest`, or raise SyncError. A Google Sheet is first read as the server's own
+    Google account (a private sheet shared with it), then through the link (a sheet shared with anyone)."""
+    sheet = GOOGLE_SHEET.match(link.strip())
+    account = google_account() if sheet else None
+    r = drive_download(sheet[1], *account) if sheet and account else None
+    if r is None:
+        try:
+            r = get_public(download_url(link), timeout=(10, 120))
+        except UnsafeURLError as e:
+            raise SyncError(str(e)) from e
+        except requests.RequestException as e:
+            raise SyncError(f"Couldn't reach the link ({e.__class__.__name__})") from e
+    share = f" To keep it private, share it as Viewer with the app's Google account {account[0]}." if account else ""
     if r.status_code in (401, 403, 404):
-        raise SyncError("The link was refused: it is wrong, expired, or not shared with 'anyone with the link'.")
+        refused = "The link was refused: it is wrong, expired, or not shared with 'anyone with the link'."
+        raise SyncError(refused + share)
     if not r.ok:
         raise SyncError(f"The link answered {r.status_code}")
     if len(r.content) > MAX_BYTES:
         raise SyncError("The file is too big")
     if not r.content.startswith(b"PK"):  # an .xlsx is a zip file; a sign-in page is HTML
-        raise SyncError("The link didn't give an Excel file (is it a sign-in page?)")
+        raise SyncError(f"The link didn't give an Excel file (is it a sign-in page?).{share}")
     dest.write_bytes(r.content)
 
 

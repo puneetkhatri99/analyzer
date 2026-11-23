@@ -39,3 +39,8 @@ def test_with_scheme_adds_https_even_when_the_host_starts_with_http():
     assert web.with_scheme("apply.workable.com/j/1") == "https://apply.workable.com/j/1"
     assert web.with_scheme("http://a.org/j") == "http://a.org/j"
     assert web.with_scheme("HTTPS://a.org/j") == "HTTPS://a.org/j"
+
+
+def test_url_key_survives_a_malformed_address():
+    assert web.url_key("http://[::1") == "http://[::1"  # no ValueError: one bad row can't stop a whole import
+    assert web.url_key("HTTPS://WWW.A.COM/x/?q=1") == "a.com/x"

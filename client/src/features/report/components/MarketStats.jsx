@@ -23,16 +23,18 @@ export default function MarketStats({ r, roleText, compact }) {
           value={v.percent === 0 ? "On par" : `${Math.abs(v.percent)}% ${v.percent < 0 ? "lower" : "higher"}`}>
           {pay(v.area_typical, r.unit)} in {v.area}, {pay(v.national_typical, r.unit)} nationwide
         </Stat>
-      ) : (
+      ) : !compact && (  // on paper there is nobody to "pick a state", so the printed report leaves the empty box out
         <Stat title="Compared with national">
           {r.filters.state.length
-            ? `Not enough listed pay in ${r.title.area} to compare with national pay yet.`
+            ? `${r.title.area} is combined with nationwide figures here, so there is no separate comparison.`
             : "Pick a state to compare it with national pay."}
         </Stat>
       )}
-      <Stat title="Share of openings" value={share != null ? `${share < 1 ? "<1" : share}%` : "—"}>
-        {share != null ? `of current ministry openings are ${roleText} roles` : "Pick a role to see its share."}
-      </Stat>
+      {(share != null || !compact) && (
+        <Stat title="Share of openings" value={share != null ? `${share < 1 ? "<1" : share}%` : "—"}>
+          {share != null ? `of current ministry openings are ${roleText} roles` : "Pick a role to see its share."}
+        </Stat>
+      )}
     </div>
   );
 }

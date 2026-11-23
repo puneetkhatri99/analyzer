@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.auth.dependencies import require_editor, require_viewer
 from app.core.db import get_conn
+from app.job_pages.parser import denomination_in
 from app.jobs import repository, service
 from app.jobs.repository import BizdevSource, Source
 
@@ -116,6 +117,32 @@ def job_contact(source: BizdevSource, id: str, admin_email: str = Depends(requir
         raise HTTPException(404, "No such job")
     log.info("Contact of %s job %s viewed by %s", source, id, admin_email)
     return contact
+
+
+class EmployerFacts(BaseModel):
+    source: Source
+    id: str = Field(min_length=1, max_length=500)  # any job of the employer: post_uuid in /api/jobs
+    church_size: int | None = Field(default=None, ge=1, le=100_000)
+    denomination: str | None = Field(default=None, min_length=1, max_length=80)
+
+
+@router.patch("/api/admin/employer")
+def set_employer(body: EmployerFacts, admin_email: str = Depends(require_editor)) -> dict[str, Any]:
+    """An editor fills in the church size and/or denomination the AI couldn't find (brief Rec. 2: "manually work
+    through ones without church size"). Applies to every job of that employer; logged with the old and new values."""
+    if body.church_size is None and body.denomination is None:
+        raise HTTPException(422, "Give a church size, a denomination, or both.")
+    denomination = body.denomination and (denomination_in(body.denomination) or body.denomination.strip())
+    result = repository.set_employer_facts(body.source, body.id, body.church_size, denomination, admin_email)
+    if result is None:
+        raise HTTPException(404, "No such job")
+    log.info(
+        "Employer facts set by %s for %r (%s, %d jobs): church size %s -> %s, denomination %r -> %r",
+        admin_email, result["employer"], body.source, result["jobs"], result["old_size"],
+        body.church_size if body.church_size is not None else result["old_size"], result["old_denomination"],
+        denomination or result["old_denomination"],
+    )  # fmt: skip
+    return {"jobs": result["jobs"]}
 
 
 @router.delete("/api/admin/jobs")

@@ -2,7 +2,7 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import BarList, { withPay } from "./BarList.jsx";
 
-const MIN_STATES = 3; // one or two states make a comparison that says nothing
+const MIN_STATES = 2; // one row compares nothing (thin states arrive combined by region)
 
 function BreakdownCard({ title, rows, selected, unit, children }) {
   return (
@@ -15,9 +15,10 @@ function BreakdownCard({ title, rows, selected, unit, children }) {
 }
 
 // " in Ohio", " in the Midwest"; nothing when the figures are national.
-export const areaPhrase = (r) => (r.scope === "region" ? ` in the ${r.area_name}` : r.scope === "state" ? ` in ${r.area_name}` : "");
+export const areaPhrase = (r) => (r.scope === "region" ? ` in the ${r.area_name}` : r.scope === "state" || r.scope === "nearby" ? ` in ${r.area_name}` : "");
 
-// Typical pay compared across roles, church sizes, states and denominations. Sections without enough pay are left out.
+// Typical pay compared across roles, church sizes, states and denominations. Groups with too little pay arrive
+// combined with similar ones (see BarList); a section with nothing to compare is left out.
 export default function Breakdowns({ r }) {
   const f = r.filters;
   const sizes = withPay(r.by_size);
@@ -36,7 +37,7 @@ export default function Breakdowns({ r }) {
       )}
       {sizes.length > 0 && (
         <div data-reveal>
-          <BreakdownCard title="By weekly attendance" rows={sizes} selected={f.size} unit={r.unit}>
+          <BreakdownCard title="By church size" rows={sizes} selected={f.size} unit={r.unit}>
             {f.size.length > 0 && <p className="mh-small">Your selected sizes are highlighted.</p>}
           </BreakdownCard>
         </div>

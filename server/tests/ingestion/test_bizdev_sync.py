@@ -141,3 +141,70 @@ def test_admin_endpoints(clean, make_user, sign_in):
     assert saved["links"] == {"churches": "https://x.invalid/a.xlsx", "nonprofits": None}  # the key is never shown
     cleared = admin.post("/api/admin/bizdev-sync", json={"kind": "churches", "url": ""}).json()
     assert cleared["links"]["churches"] is None
+
+
+def test_a_private_sheet_is_read_as_the_apps_own_google_account_and_the_token_stays_with_google(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    sheet = "https://docs.google.com/spreadsheets/d/AbC-123_x/edit"
+    account = "sheets@demo.iam.gserviceaccount.com"
+    sent = []
+
+    def answer(content=b"", status=200, data=None):
+        return SimpleNamespace(content=content, status_code=status, ok=status < 400, text="", json=lambda: data)
+
+    def drive(url, params=None, headers=None, **kw):
+        sent.append((url, headers))
+        assert url.startswith(bs.DRIVE_FILES) and headers["Authorization"] == "Bearer tok"
+        if url.endswith("/export"):
+            assert params["mimeType"] == bs.XLSX
+            return answer(b"PK\x03\x04sheet")
+        return answer(data={"mimeType": "application/vnd.google-apps.spreadsheet"}, status=drive.status)
+
+    drive.status = 200
+    monkeypatch.setattr(bs, "google_account", lambda: (account, "tok"))
+    monkeypatch.setattr(bs.requests, "get", drive)
+    monkeypatch.setattr(bs, "get_public", lambda *a, **k: pytest.fail("the link was used though Drive gave the file"))
+    bs.fetch(sheet, tmp_path / "a.xlsx")
+    assert (tmp_path / "a.xlsx").read_bytes() == b"PK\x03\x04sheet" and len(sent) == 2
+
+    # not shared with the app's account: the link itself is tried, and the error says whom to share with
+    drive.status = 404
+    public = []
+    monkeypatch.setattr(bs, "get_public", lambda url, **k: public.append(url) or answer(b"<html>Sign in</html>"))
+    with pytest.raises(bs.SyncError, match=account):
+        bs.fetch(sheet, tmp_path / "b.xlsx")
+    assert public == [bs.download_url(sheet)]
+
+    # a link that isn't a Google Sheet never asks for the account, so the token can't go anywhere else
+    monkeypatch.setattr(bs, "google_account", lambda: pytest.fail("asked for the Google account"))
+    monkeypatch.setattr(bs, "get_public", lambda *a, **k: answer(b"PK\x03\x04other"))
+    bs.fetch("https://x.invalid/a.xlsx", tmp_path / "c.xlsx")
+
+
+def test_the_apps_google_account_asks_only_for_read_only_access(monkeypatch):
+    from google.auth.exceptions import DefaultCredentialsError
+    from google.oauth2 import service_account  # noqa: F401  the key-file signer is installed
+
+    asked = []
+
+    class Key:  # what google.auth.default gives for a key file
+        service_account_email = "sheets@demo.iam.gserviceaccount.com"
+        token = None
+
+        def refresh(self, request):
+            self.token = "tok"
+
+    def default(scopes):
+        asked.append(scopes)
+        return Key(), "demo"
+
+    monkeypatch.setattr(bs.google.auth, "default", default)
+    assert bs.google_account() == ("sheets@demo.iam.gserviceaccount.com", "tok")
+    assert asked == [["https://www.googleapis.com/auth/drive.readonly"]]
+
+    def no_key(scopes):
+        raise DefaultCredentialsError("no key file")
+
+    monkeypatch.setattr(bs.google.auth, "default", no_key)
+    assert bs.google_account() is None  # no key: the link itself is used, as before

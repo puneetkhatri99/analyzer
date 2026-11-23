@@ -91,6 +91,7 @@ def _flow(sign_in):
     )
     assert e.get("/api/admin/costs").status_code == 403
     assert e.get("/api/admin/leads").status_code == 403
+    assert e.delete("/api/admin/leads/x@example.invalid").status_code == 403
 
     # Admin resets a password: the user is signed out and must change it again; then promotes and removes users.
     assert a.patch(f"/api/admin/users/{VIEWER}", json={"password": "another-temp-1"}).status_code == 200

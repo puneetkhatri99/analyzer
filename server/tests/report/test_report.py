@@ -4,7 +4,7 @@ from app.report import service as report
 from app.shared.geo import state_name
 
 
-def job(role="Worship/Music", state="Ohio", pay=50000, period="year", hours="Full-Time", size=None, denom=None):
+def job(role="Worship", state="Ohio", pay=50000, period="year", hours="Full-Time", size=None, denom=None):
     return {
         "role": role,
         "state": state,
@@ -20,21 +20,26 @@ def job(role="Worship/Music", state="Ohio", pay=50000, period="year", hours="Ful
     }
 
 
-def test_widens_state_then_region_then_national():
+def test_widens_state_then_nearby_then_region_then_national():
     ohio = [job(pay=40000)] * 5
-    indiana = [job(state="Indiana", pay=60000)] * 5
+    indiana = [job(state="Indiana", pay=60000)] * 5  # borders Ohio
+    iowa = [job(state="Iowa", pay=70000)] * 5  # same region, no border
     texas = [job(state="Texas", pay=80000)] * 20
 
-    r = report.build_report({"role": ["Worship/Music"], "state": ["Ohio"]}, ohio + indiana + texas)
+    r = report.build_report({"role": ["Worship"], "state": ["Ohio"]}, ohio + indiana + texas)
     assert r["scope"] == "state" and r["pay"]["typical"] == 40000 and r["note"] is None
 
-    r = report.build_report({"role": ["Worship/Music"], "state": ["Ohio"]}, ohio[:2] + indiana + texas)
-    assert r["scope"] == "region" and r["area_name"] == "Midwest" and "Midwest" in r["note"]
+    r = report.build_report({"role": ["Worship"], "state": ["Ohio"]}, ohio[:2] + indiana + iowa + texas)
+    assert r["scope"] == "nearby" and r["pay"]["typical"] == 60000  # Ohio + Indiana; Iowa not yet
+    assert r["covers"]["area"] == "Ohio and nearby states"
 
-    r = report.build_report({"role": ["Worship/Music"], "state": ["Ohio"]}, ohio[:2] + texas)
+    r = report.build_report({"role": ["Worship"], "state": ["Ohio"]}, ohio[:2] + iowa + texas)
+    assert r["scope"] == "region" and r["area_name"] == "Midwest and nearby states" and "Midwest" in r["note"]
+
+    r = report.build_report({"role": ["Worship"], "state": ["Ohio"]}, ohio[:2] + texas)
     assert r["scope"] == "national" and "national" in r["note"]
 
-    r = report.build_report({"role": ["Worship/Music"], "state": ["Ohio"]}, ohio[:2])
+    r = report.build_report({"role": ["Worship"], "state": ["Ohio"]}, ohio[:2])
     assert r["pay"] is None and "Too few" in r["note"]
 
 
@@ -69,7 +74,7 @@ def test_public_api_hides_counts_sources_and_links(client):
     c = client
     replies = [
         c.get("/api/report/options").json(),
-        c.get("/api/report?role=Worship/Music&state=Ohio&state=Indiana").json(),
+        c.get("/api/report?role=Worship&state=Ohio&state=Indiana").json(),
     ]
     for reply in replies:
         assert not {"postings", "paid", "total", "post_url", "company_name", "origin", "board_source"} & set(
@@ -88,22 +93,22 @@ def test_attendance_counts_each_church_once_and_needs_enough_churches():
     assert report.typical_attendance(churches + mega + nonprofit) == 100  # 30 churches; the megachurch counts once
 
 
-def test_distinct_openings_count_a_repost_once():
-    def posting(employer="Grace Church", title="Worship Pastor", state="Ohio"):
-        return {"company_name": employer, "job_name": title, "state": state}
-
-    jobs = [
-        posting(),
-        posting(employer=" grace church "),  # the same job reposted: counted once
-        posting(state="Indiana"),  # same title elsewhere: a different opening
-        posting(title="Youth Pastor"),
-        posting(employer=None),  # no employer: counted on its own
-        posting(employer=None),
-    ]
-    assert report.distinct_openings(jobs) == 5
+def test_placeholder_and_missing_employers_stay_off_the_report():
+    assert report.hidden_employer("Z. Do Not Use") == "placeholder 'Z. Do Not Use'"
+    assert report.hidden_employer(" z. do not use ") is not None
+    assert report.hidden_employer(None) == report.hidden_employer("  ") == "no employer"
+    assert report.hidden_employer("Grace Church") is None
 
 
 def test_figures_are_rounded():
     assert report.build_report({}, [job(pay=66260)] * 5)["pay"]["typical"] == 66500
     hourly = [job(pay=17.12, period="hour", hours="Part-Time")] * 5
     assert report.build_report({"type": "part-time"}, hourly)["pay"]["typical"] == 17.0
+
+
+def test_zero_or_negative_pay_is_not_a_salary():
+    rows = [job(pay=0)] * 6 + [job(pay=-100)] * 6
+    r = report.build_report({"state": ["Ohio"]}, rows)
+    assert r["pay"] is None and r["vs_national"] is None  # no ZeroDivisionError, no figure from bad parses
+    rows += [job(pay=60000)] * 6
+    assert report.build_report({"state": ["Ohio"]}, rows)["pay"]["typical"] == 60000

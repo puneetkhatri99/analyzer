@@ -30,7 +30,10 @@ export default function PayCard({ r, typeLabel }) {
         </div>
       </div>
       <RangeBar p={p} unit={r.unit} />
-      <span className="mh-confidence"><i aria-hidden="true" />Confidence: {p.confidence}</span>
+      <div className="mh-pay-badges">
+        <span className="mh-confidence"><i aria-hidden="true" />Confidence: {p.confidence}</span>
+        {r.merged?.length > 0 && <span className="mh-confidence mh-confidence-merged"><i aria-hidden="true" />Based on combined data</span>}
+      </div>
       <p className="mh-pay-foot">Drawn from {r.openings_label} active ministry job openings. Data as of {longDay(r.as_of)}.</p>
     </section>
   );

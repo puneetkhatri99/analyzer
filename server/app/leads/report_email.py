@@ -1,6 +1,6 @@
 """The visitor's report by email, when they tick "Email me this report" on the sign-up form.
 
-The email holds the headline figures and a link back to the full report; it's sent through Resend (daily_report)."""
+The email holds the headline figures and a link back to the full report; it's sent by shared/email.py (EMAIL.md)."""
 
 import logging
 import re
@@ -11,7 +11,15 @@ from psycopg.types.json import Jsonb
 
 from app.core.config import get_settings
 from app.core.db import get_conn
-from app.report.service import FILTER_KEYS, blended_jobs, build_report, report_options
+from app.report.service import (
+    FILTER_KEYS,
+    blended_jobs,
+    build_report,
+    current_denominations,
+    current_roles,
+    current_sizes,
+    report_options,
+)
 from app.shared.email import EmailError, email_ready, send_email
 from app.shared.geo import state_name
 
@@ -35,8 +43,15 @@ def known_filters(f: dict[str, Any], jobs: list[dict[str, Any]]) -> dict[str, An
     otherwise go out in an email from our domain ("Your MinistryHub pay report: <anything>")."""
     o = report_options(jobs)
     allowed = {"role": set(o["roles"]), "size": set(o["sizes"]), "denomination": set(o["denominations"])}
-    out = {**f, "state": list(dict.fromkeys(s for s in map(state_name, f["state"]) if s))}
-    return out | {k: [v for v in f[k] if v in values] for k, values in allowed.items()}
+    states = list(dict.fromkeys(s for s in map(state_name, f["state"]) if s))
+    f = {
+        **f,
+        "state": states,
+        "role": current_roles(f["role"]),
+        "size": current_sizes(f["size"]),
+        "denomination": current_denominations(f["denomination"]),
+    }
+    return f | {k: [v for v in f[k] if v in values] for k, values in allowed.items()}
 
 
 def greeting(name: str) -> str:
@@ -58,6 +73,9 @@ def render(name: str, f: dict[str, Any], jobs: list[dict[str, Any]] | None = Non
     )
     link = f"{get_settings().site_url.rstrip('/')}/report?{link_query}"
     lines = [f"Hi {greeting(name)},", "", f"Here is your MinistryHub pay report for {what} ({f['type']}).", ""]
+    if r["merged"]:  # before the figures, so nobody reads them as figures for the exact search
+        lines += ["Too few openings list pay for the exact search, so these figures combine data:"]
+        lines += [f"  {m['label']}: {m['chosen']} -> {m['shown']}" for m in r["merged"]] + [""]
     if p := r["pay"]:
         per = " an hour" if r["unit"] == "hour" else " a year"
         lines += [
@@ -65,7 +83,7 @@ def render(name: str, f: dict[str, Any], jobs: list[dict[str, Any]] | None = Non
             f"The middle half of postings pay {_money(p['low'], r['unit'])} to {_money(p['high'], r['unit'])}{per}",
             f"Confidence: {p['confidence']}",
         ]
-    if r["note"]:
+    if r["note"] and not r["merged"]:  # the merges are listed above; this is only the "too few anywhere" note
         lines += ["", r["note"]]
     if v := r["vs_national"]:
         side = "above" if v["percent"] > 0 else "below" if v["percent"] < 0 else "level with"
@@ -84,7 +102,7 @@ def render(name: str, f: dict[str, Any], jobs: list[dict[str, Any]] | None = Non
 
 
 def _sent_today(email: str | None = None) -> int:
-    """Report emails that went to Resend in the last 24 hours, for one address or (None) for everyone. Rows from
+    """Report emails sent in the last 24 hours, for one address or (None) for everyone. Rows from
     before statuses existed count as sent."""
     with get_conn() as conn:
         (n,) = conn.execute(
@@ -114,11 +132,11 @@ def _record(email: str, f: dict[str, Any], status: str, reason: str | None = Non
 
 def send(email: str, name: str, query: str) -> None:
     """Runs after the sign-up reply (a background task), so a slow or failing send never holds up the report.
-    Every outcome is recorded: sent, failed (Resend's reason) or skipped (not set up / daily limit)."""
+    Every outcome is recorded: sent, failed (the server's reason) or skipped (not set up / daily limit)."""
     jobs = blended_jobs()
     f = known_filters(parse_filters(query), jobs)
     if not email_ready():
-        reason = "email isn't set up on the server (RESEND_API_KEY, ALERT_FROM_EMAIL)"
+        reason = "email isn't set up on the server (SMTP_HOST, ALERT_FROM_EMAIL)"
     elif _sent_today(email) >= MAX_PER_DAY:
         reason = f"daily limit reached ({MAX_PER_DAY} report emails per address per 24 hours)"
     elif _sent_today() >= MAX_ALL_PER_DAY:

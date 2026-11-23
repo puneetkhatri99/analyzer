@@ -24,7 +24,7 @@ from app.ingestion import bizdev_sync, daily_feed
 from app.ingestion.bizdev_sync_router import router as bizdev_sync_router
 from app.ingestion.feed_router import router as feed_router
 from app.jobs.router import router as jobs_router
-from app.leads import daily_report
+from app.leads import crm_sync, daily_report
 from app.leads.router import admin_router as leads_admin_router
 from app.leads.router import router as leads_router
 from app.report.router import router as report_router
@@ -48,7 +48,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # The daily jobs feed (app/ingestion/daily_feed.py), also production only
     stop_feed = daily_feed.start_scheduler() if get_settings().app_env == "production" else None
     stop_bizdev = bizdev_sync.start_scheduler() if get_settings().app_env == "production" else None
+    stop_crm = crm_sync.start_scheduler() if get_settings().app_env == "production" else None  # off without keys
     yield
+    if stop_crm:
+        stop_crm.set()
     if stop_bizdev:
         stop_bizdev.set()
     if stop_daily:

@@ -108,7 +108,7 @@ export default function PricingDialog({ pricing }) {
             </p>
             <p>
               List prices from OpenAI’s model pages (GPT-5.4 and 5.5 from price trackers) in November 2026, and only an estimate:
-              your OpenAI billing page is the exact figure. To change the model, set OPENAI_MODEL on the server.
+              your OpenAI billing page is the exact figure. The model is fixed in the code (MODEL in server/app/ai_usage/service.py).
             </p>
           </div>
         </DialogContent>

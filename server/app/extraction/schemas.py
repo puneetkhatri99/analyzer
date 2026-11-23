@@ -2,6 +2,10 @@ from typing import Literal
 
 from pydantic import BaseModel, HttpUrl
 
+from app.jobs.roles import ROLE_LABELS
+
+Role = Literal[ROLE_LABELS]  # type: ignore[valid-type]  # the labels live in one place, roles.py
+
 
 # What the model returns for one page, and the job an admin edits and saves. No docstring: it would be sent to
 # OpenAI as the schema's description and change the prompt.
@@ -26,8 +30,8 @@ class JobExtraction(BaseModel):
 
 
 class ChurchFacts(BaseModel):
-    church_size: int | None  # average weekly attendance, only if a source states it
-    year: int | None  # the year the attendance figure is for, when the source says
+    church_size: int | None  # weekly attendance, else membership, only if a source states it
+    year: int | None  # the year the figure is for, when the source says
     denomination: str | None
     source_url: str | None  # page the attendance figure comes from
     evidence: str | None  # short quote from that page, containing the number
@@ -41,6 +45,11 @@ class PostingReview(BaseModel):
     salary_min: float | None
     salary_max: float | None
     salary_period: Literal["year", "hour"] | None
+    role: Role
+
+
+class RoleReview(BaseModel):
+    role: Role
 
 
 class ExtractRequest(BaseModel):

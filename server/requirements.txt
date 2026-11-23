@@ -12,6 +12,7 @@ requests==2.34.2
 beautifulsoup4==4.15.0
 openpyxl==3.1.5
 openai==3.49.0
+google-auth==2.63.1  # private BizDev sheets, read as the app's own Google account (bizdev_sync.py)
 
 # Logs: optional shipping to Axiom (app/core/logs.py)
 axiom-py==0.15.0

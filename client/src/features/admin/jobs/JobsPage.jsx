@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { deleteJob, fetchJobContact, rejectJob } from "@/api/admin.js";
+import { deleteJob, fetchJobContact, rejectJob, setEmployerFacts } from "@/api/admin.js";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,7 @@ export default function JobsPage({ canEdit = false }) {
     `ministry-jobs-${d.source.join("-")}-${new Date().toISOString().slice(0, 10)}.csv`);
   const removeJob = () => deleteJob(openJob.source, openJob.post_uuid).then(() => { setOpenJob(null); d.reload(); });
   const reject = (reason) => rejectJob(openJob.post_uuid, reason).then(() => { setOpenJob(null); d.reload(); });
+  const setFacts = (facts) => setEmployerFacts(openJob.source, openJob.post_uuid, facts).then(() => { setOpenJob(null); d.reload(); });
   const focusRow = (id) => document.querySelector(`button.job-title[data-id="${CSS.escape(id)}"]`)?.focus();
 
   return (
@@ -60,6 +61,7 @@ export default function JobsPage({ canEdit = false }) {
 
       {openJob && (
         <JobDetail job={openJob} onClose={() => setOpenJob(null)} onDelete={canEdit ? removeJob : null} onReject={canEdit ? reject : null}
+          onSetFacts={canEdit ? setFacts : null}
           onContact={canEdit && openJob.source !== "json" ? () => fetchJobContact(openJob.source, openJob.post_uuid) : null}
           returnFocus={() => focusRow(openJob.post_uuid)} />
       )}
