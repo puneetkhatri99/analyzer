@@ -1,5 +1,5 @@
 // Public report API: summary figures only, no counts, employers or links.
-import { LISTS } from "@/features/report/lib/filters.js";
+import { LISTS } from "@/lib/filters.js";
 import { getJSON, postJSON } from "./http.js";
 
 // Lists go out as repeated keys: ?state=Ohio&state=Indiana. Full-time is the default and is left out.

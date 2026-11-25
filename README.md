@@ -11,8 +11,9 @@ analyser/
 │   └── src/
 │       ├── features/       landing, report, admin (jobs, rejected, leads, costs, settings, users, add-job)
 │       ├── api/            calls to the API
-│       ├── components/ui/  shared shadcn/ui components
-│       └── lib/            formatting, CSV and other helpers
+│       ├── components/    shared components: ui/ (shadcn/ui), site/ (public header, footer, layout)
+│       ├── hooks/          shared hooks
+│       └── lib/            shared helpers: formatting, CSV, pay, report filters and share links, lead tracking
 ├── server/
 │   ├── app/                one folder per feature (below), plus core/ and shared/
 │   │   ├── main.py         the FastAPI app: middleware, routers, the built dashboard
@@ -126,7 +127,9 @@ The dashboard shows each source on its own tab (`?source=json|churches|nonprofit
 one that has run: `migrate` refuses a file whose text changed after it was applied. Each file runs in its own
 transaction. `python -m app.cli migrate --dry-run` lists what would run. Render runs `migrate` before every start.
 
-**Tests and lint** (from `server/`): `pytest`, `ruff check .`, `ruff format .`. Tests use `DATABASE_URL`; set
+**Import rule.** Imports go one way: `core` ← `shared` ← `auth` ← `job_pages`/`ai_usage` ← `jobs` ← `report` ← `leads`/`extraction` ← `ingestion` ← `main`/`cli` (a package imports only what is to its left). On the client, shared code (`api`, `components`, `hooks`, `lib`) never imports a feature, and one feature reaches another only through its `index.js`. `lint-imports` (server) and `npm run lint` (client) fail on a break.
+
+**Tests and lint** (from `server/`): `pytest`, `ruff check .`, `ruff format .`, `lint-imports`. Client (from `client/`): `npm test`, `npm run lint`. Tests use `DATABASE_URL`; set
 `TEST_DATABASE_URL` to run them against a separate database instead (it is migrated first).
 
 **2. API** (from `server/`)

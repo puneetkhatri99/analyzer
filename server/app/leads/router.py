@@ -15,6 +15,7 @@ from app.auth.dependencies import require_admin
 from app.core.config import get_settings
 from app.core.db import get_conn
 from app.leads import HOT_AT_REPORTS, daily_report, report_email
+from app.shared.alerts import RECIPIENTS
 from app.shared.email import is_valid_email, normalize_email
 
 log = logging.getLogger("admin")
@@ -227,7 +228,7 @@ def save_report_settings(body: ReportSettings, admin: str = Depends(require_admi
             raise HTTPException(422, f"{raw.strip() or 'An empty entry'} isn't an email address.")
         if email not in emails:
             emails.append(email)
-    daily_report.set_setting(daily_report.RECIPIENTS, emails, by=admin)
+    daily_report.set_setting(RECIPIENTS, emails, by=admin)
     log.info("Daily report recipients changed by %s: %d address(es)", admin, len(emails))
     return _settings()
 

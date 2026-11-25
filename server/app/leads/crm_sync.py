@@ -27,7 +27,7 @@ from app.core.config import get_settings
 from app.core.db import get_conn
 from app.core.logs import script_log
 from app.core.settings_store import get_setting, set_setting
-from app.ingestion import daily_feed
+from app.shared.alerts import alert_admin
 
 log = logging.getLogger("crm_sync")
 
@@ -193,7 +193,7 @@ def run_and_record(*, force: bool = False, dry_run: bool = False) -> int:
         if status["ok"]:
             set_setting(DONE_KEY, week, by="crm-sync")
         else:
-            daily_feed.alert_admin(
+            alert_admin(
                 "MinistryHub newsletter sync failed",
                 f"{status['failed']} sign-up(s) couldn't be sent to Mailchimp this week; it tries again tomorrow. "
                 "The server log has Mailchimp's reason (search for crm_sync).",

@@ -34,7 +34,7 @@ from app.core.logs import script_log
 from app.core.settings_store import get_setting, set_setting
 from app.ingestion import bizdev_enrich, daily_feed
 from app.ingestion.bizdev import import_file
-from app.jobs.repository import BIZDEV_TABLES
+from app.shared.tables import BIZDEV_TABLES
 from app.shared.web import UnsafeURLError, get_public
 
 log = logging.getLogger("bizdev_sync")
@@ -188,7 +188,7 @@ def run_and_record(*, force: bool = False) -> int:
             daily_feed.alert_admin(
                 "MinistryHub BizDev sheet sync failed",
                 f"The weekly BizDev sheet download failed ({bad}).\nCheck the links in Admin → Settings: "
-                f"{daily_feed._admin_link()}",
+                f"{daily_feed.admin_link()}",
             )
         return 0 if status["ok"] else 1
     finally:

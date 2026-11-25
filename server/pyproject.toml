@@ -24,3 +24,23 @@ known-first-party = ["app"]
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
 pythonpath = ["."]
+
+# One-way imports: a package may import only the ones below it. `lint-imports` (run from server/) fails on a cycle or an
+# upward import. Packages on one line (a | b) must not import each other either.
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "Features import downward only"
+type = "layers"
+layers = [
+    "app.main | app.cli",  # entry points
+    "app.ingestion",  # orchestrator: feeds and syncs call into the features below
+    "app.leads | app.extraction",
+    "app.report",
+    "app.jobs",
+    "app.job_pages | app.ai_usage",
+    "app.auth",
+    "app.shared",
+    "app.core",
+]

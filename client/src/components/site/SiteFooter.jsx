@@ -1,5 +1,5 @@
 import React from "react";
-import { PRIVACY_URL, SITE_URL, TERMS_URL } from "./links.js";
+import { PRIVACY_URL, SITE_URL, TERMS_URL } from "@/lib/links.js";
 
 export default function SiteFooter() {
   return (

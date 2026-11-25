@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { track } from "@/features/site/lead.js";
+import { track } from "@/lib/lead.js";
 
 // "Don't see your denomination?" (brief D5): what the visitor types goes to their activity in Admin → Leads and to
 // the daily lead email, so the list can grow over time.

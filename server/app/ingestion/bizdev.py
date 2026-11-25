@@ -16,8 +16,8 @@ import openpyxl
 
 from app.core.db import connect
 from app.core.logs import script_log
-from app.jobs.repository import BIZDEV_TABLES
 from app.shared.dates import to_date
+from app.shared.tables import BIZDEV_TABLES
 from app.shared.web import url_key
 
 log = logging.getLogger("import_bizdev")

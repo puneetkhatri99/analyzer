@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 from app.core.db import get_conn
 from app.core.logs import script_log
 from app.job_pages.fetcher import HOST_DELAY, fetch_one
-from app.jobs.repository import BIZDEV_TABLES
+from app.shared.tables import BIZDEV_TABLES
 from app.shared.web import with_scheme
 
 MAX_BLOCKED_IN_A_ROW = 10

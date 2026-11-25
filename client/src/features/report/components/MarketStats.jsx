@@ -1,6 +1,6 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
-import { pay } from "../lib/pay.js";
+import { pay } from "@/lib/pay.js";
 
 function Stat({ title, value, children }) {
   return (

@@ -1,6 +1,6 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
-import { BOOK_URL } from "@/features/site/links.js";
+import { BOOK_URL } from "@/lib/links.js";
 import { longDay } from "@/lib/format.js";
 import BarList, { withPay } from "./BarList.jsx";
 import MarketStats from "./MarketStats.jsx";

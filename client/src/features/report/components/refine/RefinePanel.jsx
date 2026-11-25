@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useMediaQuery } from "@/hooks/useMediaQuery.js";
-import { activeSummary } from "../../lib/filters.js";
+import { activeSummary } from "@/lib/filters.js";
 import CheckGroup from "./CheckGroup.jsx";
 import DenominationSuggest from "./DenominationSuggest.jsx";
 import ChipPicker from "./ChipPicker.jsx";

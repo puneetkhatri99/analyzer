@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { postLead, reportQuery } from "@/api/report.js";
-import { filtersFromUrl } from "@/features/report/lib/filters.js";
-import { nextReport } from "@/features/report/lib/share.js";
-import { forgetLead, saveLead, savedLead } from "@/features/site/lead.js";
+import { filtersFromUrl } from "@/lib/filters.js";
+import { nextReport } from "@/lib/share.js";
+import { forgetLead, saveLead, savedLead } from "@/lib/lead.js";
 
 export const NATIONWIDE = "nationwide";
 export const ANY_SIZE = "any"; // Radix Select can't hold "", so "Any size" has a value of its own

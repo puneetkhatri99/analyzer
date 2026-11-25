@@ -25,21 +25,17 @@ from app.core.db import get_conn
 from app.core.logs import script_log
 from app.core.settings_store import get_setting, set_setting
 from app.leads import HOT_AT_REPORTS
+from app.shared.alerts import get_recipients
 from app.shared.email import EmailError, email_ready, send_email
 
 log = logging.getLogger("daily_report")
 
 TZ = "America/New_York"
 SEND_FROM_HOUR = 8  # New York time: yesterday's report goes out from 8 AM, or as soon as the server is awake after
-RECIPIENTS = "hot_lead_emails"  # app_settings keys
-SENT_FOR = "daily_report_sent_for"
+SENT_FOR = "daily_report_sent_for"  # app_settings key
 
 
 # ---- settings -------------------------------------------------------------------------------------------------
-
-
-def get_recipients() -> list[str]:
-    return get_setting(RECIPIENTS, [])
 
 
 def eastern_now() -> tuple[date, int]:

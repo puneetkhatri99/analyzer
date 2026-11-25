@@ -1,5 +1,5 @@
 import React from "react";
-import { pay, rangeScale } from "../lib/pay.js";
+import { pay, rangeScale } from "@/lib/pay.js";
 
 // Lower quarter to upper quarter as a band, typical pay as a tick, and an optional marker (the visitor's offer).
 export default function RangeBar({ p, unit, marker }) {

@@ -8,6 +8,7 @@ import pytest
 from app.cli import main
 from app.core.db import get_conn
 from app.leads import daily_report as dr
+from app.shared.alerts import RECIPIENTS
 
 LEAD = "test-daily-lead@example.invalid"
 ADMIN = "test-daily-admin@example.invalid"
@@ -16,7 +17,7 @@ ADMIN = "test-daily-admin@example.invalid"
 @pytest.fixture
 def saved_settings():
     """Puts back the report's settings (recipients, last day sent) after the test."""
-    before = {k: dr.get_setting(k) for k in (dr.RECIPIENTS, dr.SENT_FOR)}
+    before = {k: dr.get_setting(k) for k in (RECIPIENTS, dr.SENT_FOR)}
     yield
     with get_conn() as conn:
         conn.execute("DELETE FROM public.app_settings WHERE key = ANY(%s)", (list(before),))
@@ -62,7 +63,7 @@ def test_cron_sends_once_from_8am_retries_a_failure_and_catches_up(client, monke
                 (LEAD,),
             )
         today, _ = dr.eastern_now()
-        dr.set_setting(dr.RECIPIENTS, ["team@example.invalid"])
+        dr.set_setting(RECIPIENTS, ["team@example.invalid"])
         with get_conn() as conn:
             conn.execute("DELETE FROM public.app_settings WHERE key = %s", (dr.SENT_FOR,))
 

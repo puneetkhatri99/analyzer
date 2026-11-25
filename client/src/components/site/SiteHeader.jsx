@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { BOOK_URL, HOW_URL, SERVICES_URL } from "./links.js";
+import { BOOK_URL, HOW_URL, SERVICES_URL } from "@/lib/links.js";
 
 export default function SiteHeader() {
   return (

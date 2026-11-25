@@ -1,7 +1,7 @@
 import React from "react";
 import SiteFooter from "./SiteFooter.jsx";
 import SiteHeader from "./SiteHeader.jsx";
-import { track } from "./lead.js";
+import { track } from "@/lib/lead.js";
 
 // Clicks that matter for sales go into a signed-up visitor's history (admin → Leads): only elements marked
 // `data-track`, so a new button isn't recorded by accident. Links to MinistryHub's site are "cta", the rest "click".

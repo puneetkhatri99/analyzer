@@ -40,9 +40,8 @@ from app.ingestion.feed import load_posting
 from app.job_pages.parser import denomination_in
 from app.jobs.repository import reject_posting
 from app.jobs.roles import bucket_role, pick_role
-from app.leads.daily_report import get_recipients
 from app.report.data_check import log_data_check
-from app.shared.email import EmailError, email_ready, send_email
+from app.shared.alerts import admin_link, alert_admin
 from app.shared.web import UnsafeURLError, get_public
 
 log = logging.getLogger("daily_feed")
@@ -50,7 +49,6 @@ log = logging.getLogger("daily_feed")
 URL_KEY = "feed_url"
 DONE_KEY = "daily_feed_done_for"
 STATUS_KEY = "daily_feed_status"
-ALERT_KEY = "daily_feed_alert_for"
 WARN_DAYS = 7  # email this many days before the link expires
 CHECK_EVERY = 15 * 60  # seconds, for the API's own timer
 MAX_POST_CHARS = 12_000  # of one posting's text sent to the AI
@@ -156,34 +154,13 @@ def download(url: str) -> list[dict[str, Any]]:
 # ---- telling the admin ----------------------------------------------------------------------------------------
 
 
-def alert_admin(subject: str, text: str) -> None:
-    """Email the daily-report addresses, at most once a day. Never raises: the run's own result matters more."""
-    today = datetime.now(UTC).date().isoformat()
-    if get_setting(ALERT_KEY) == today:
-        return
-    recipients = get_recipients()
-    if not recipients or not email_ready():
-        log.warning("Admin not emailed (%s): no addresses in Admin → Settings, or email isn't set up", subject)
-        return
-    try:
-        send_email(recipients, subject, text)
-    except EmailError as e:
-        log.error("Admin not emailed (%s): %s", subject, e)
-        return
-    set_setting(ALERT_KEY, today, by="daily-feed")
-
-
-def _admin_link() -> str:
-    return f"{get_settings().site_url.rstrip('/')}/admin#settings"
-
-
 def warn_if_near_expiry(url: str) -> None:
     left = link_state(url)["days_left"]
     if left is not None and 0 <= left <= WARN_DAYS:
         alert_admin(
             f"MinistryHub jobs feed link expires in {left} day{'' if left == 1 else 's'}",
             f"The signed link the daily jobs feed uses stops working in {left} day(s).\n"
-            f"Get a new link from the feed provider and paste it in Admin → Settings: {_admin_link()}",
+            f"Get a new link from the feed provider and paste it in Admin → Settings: {admin_link()}",
         )
 
 
@@ -446,7 +423,7 @@ def run(*, run_id: str, dry_run: bool = False) -> dict[str, Any]:
         alert_admin(
             "MinistryHub jobs feed link has expired",
             f"The daily jobs feed can't be downloaded because its signed link expired.\n"
-            f"Get a new link from the feed provider and paste it in Admin → Settings: {_admin_link()}",
+            f"Get a new link from the feed provider and paste it in Admin → Settings: {admin_link()}",
         )
         return status
     warn_if_near_expiry(url)
@@ -462,7 +439,7 @@ def run(*, run_id: str, dry_run: bool = False) -> dict[str, Any]:
         if "refused" in str(e):
             alert_admin(
                 "MinistryHub jobs feed link was refused",
-                f"{e}\nPaste a new link in Admin → Settings: {_admin_link()}",
+                f"{e}\nPaste a new link in Admin → Settings: {admin_link()}",
             )
         return status
     fresh, skipped = new_postings(jobs)
@@ -483,7 +460,7 @@ def run(*, run_id: str, dry_run: bool = False) -> dict[str, Any]:
         b = budget()
         ai = f" The monthly AI limit (${b['limit_usd']:.2f}) is reached, so nothing was enriched."
         alert_admin(
-            "MinistryHub monthly AI limit reached", f"{ai.strip()} Raise it in Admin → AI costs: {_admin_link()}"
+            "MinistryHub monthly AI limit reached", f"{ai.strip()} Raise it in Admin → AI costs: {admin_link()}"
         )
     elif settings.openai_api_key:
         client = OpenAI(api_key=settings.openai_api_key)

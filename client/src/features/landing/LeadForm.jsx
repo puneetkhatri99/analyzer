@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { PRIVACY_URL, TERMS_URL } from "@/features/site/links.js";
+import { PRIVACY_URL, TERMS_URL } from "@/lib/links.js";
 import FormSelect from "./FormSelect.jsx";
 import TextField from "./TextField.jsx";
 import { ANY_SIZE, NATIONWIDE, useLeadForm } from "./useLeadForm.js";

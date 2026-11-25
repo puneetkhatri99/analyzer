@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchReport, reportQuery } from "@/api/report.js";
-import { track } from "@/features/site/lead.js";
-import { filtersFromUrl } from "../lib/filters.js";
+import { track } from "@/lib/lead.js";
+import { filtersFromUrl } from "@/lib/filters.js";
 
 // The report for the applied filters. The filter panel edits a draft; the report changes only on "Search"
 // (apply) or "Reset filters" (reset), and each change goes into the lead's history with what caused it.

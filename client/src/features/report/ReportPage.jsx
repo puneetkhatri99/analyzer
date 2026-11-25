@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import CallBand from "@/features/site/CallBand.jsx";
-import PublicLayout from "@/features/site/PublicLayout.jsx";
-import { savedLead, track } from "@/features/site/lead.js";
-import { HOW_URL } from "@/features/site/links.js";
+import CallBand from "@/components/site/CallBand.jsx";
+import PublicLayout from "@/components/site/PublicLayout.jsx";
+import { savedLead, track } from "@/lib/lead.js";
+import { HOW_URL } from "@/lib/links.js";
 import { useReveal } from "@/lib/motion.js";
 import Breakdowns from "./components/Breakdowns.jsx";
 import MarketStats from "./components/MarketStats.jsx";
@@ -12,9 +12,9 @@ import PrintReport from "./components/PrintReport.jsx";
 import ReportHeader from "./components/ReportHeader.jsx";
 import RefinePanel from "./components/refine/RefinePanel.jsx";
 import MergedNote from "./components/MergedNote.jsx";
-import { PART_TIME } from "./lib/filters.js";
+import { PART_TIME } from "@/lib/filters.js";
 import { useReport } from "./hooks/useReport.js";
-import { useReportOptions } from "./hooks/useReportOptions.js";
+import { useReportOptions } from "@/hooks/useReportOptions.js";
 
 function ReportBody({ r, roleText, typeLabel }) {
   return (

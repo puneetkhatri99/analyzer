@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { track } from "@/features/site/lead.js";
-import { offerVerdict, parseAmount, pay } from "../lib/pay.js";
+import { track } from "@/lib/lead.js";
+import { offerVerdict, parseAmount, pay } from "@/lib/pay.js";
 import { areaPhrase } from "./Breakdowns.jsx";
 import RangeBar from "./RangeBar.jsx";
 

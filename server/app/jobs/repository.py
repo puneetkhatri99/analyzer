@@ -16,11 +16,11 @@ from app.core.db import get_conn
 from app.job_pages.parser import denomination_in
 from app.jobs.roles import pick_role
 from app.shared.geo import state_name
+from app.shared.tables import BIZDEV_TABLES
 from app.shared.web import with_scheme
 
 Source = Literal["json", "churches", "nonprofits"]
 BizdevSource = Literal["churches", "nonprofits"]
-BIZDEV_TABLES: dict[str, str] = {"churches": "church_jobs", "nonprofits": "nonprofit_jobs"}
 
 HOURS_PER_YEAR = 2080
 

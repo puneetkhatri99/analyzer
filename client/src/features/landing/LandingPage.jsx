@@ -1,7 +1,7 @@
 import React from "react";
-import CallBand from "@/features/site/CallBand.jsx";
-import PublicLayout from "@/features/site/PublicLayout.jsx";
-import { useReportOptions } from "@/features/report/hooks/useReportOptions.js";
+import CallBand from "@/components/site/CallBand.jsx";
+import PublicLayout from "@/components/site/PublicLayout.jsx";
+import { useReportOptions } from "@/hooks/useReportOptions.js";
 import { useReveal } from "@/lib/motion.js";
 import HeroCopy from "./HeroCopy.jsx";
 import LeadForm from "./LeadForm.jsx";

@@ -1,5 +1,5 @@
 import React from "react";
-import { pay } from "../lib/pay.js";
+import { pay } from "@/lib/pay.js";
 
 // Groups with enough pay to show (the API sends church sizes without data as typical: null).
 export const withPay = (rows) => rows.filter((r) => r.typical != null);

@@ -10,11 +10,12 @@ from app.core.db import get_conn
 from app.extraction.schemas import ChurchFacts, PostingReview
 from app.ingestion import daily_feed as df
 from app.ingestion.feed import load_posting
+from app.shared import alerts
 
 ADMIN = "test-feed-admin@example.invalid"
 FUTURE = "https://feed.example.invalid/f.json?Expires=4102444800&Signature=abc&Key-Pair-Id=K"
 PAST = "https://feed.example.invalid/f.json?Expires=1000000000&Signature=abc&Key-Pair-Id=K"
-KEYS = (df.URL_KEY, df.DONE_KEY, df.STATUS_KEY, df.ALERT_KEY)
+KEYS = (df.URL_KEY, df.DONE_KEY, df.STATUS_KEY, alerts.ALERT_KEY)
 
 
 def job(n: int, **extra):
@@ -272,9 +273,9 @@ def test_a_church_without_a_size_is_looked_up_again_after_90_days(clean, fake_ai
 
 def test_expired_link_alerts_the_admin_once_and_changes_nothing(clean, monkeypatch):
     sent = []
-    monkeypatch.setattr(df, "get_recipients", lambda: ["a@example.invalid"])
-    monkeypatch.setattr(df, "email_ready", lambda: True)
-    monkeypatch.setattr(df, "send_email", lambda to, subject, text: sent.append(subject))
+    monkeypatch.setattr(alerts, "get_recipients", lambda: ["a@example.invalid"])
+    monkeypatch.setattr(alerts, "email_ready", lambda: True)
+    monkeypatch.setattr(alerts, "send_email", lambda to, subject, text: sent.append(subject))
     monkeypatch.setattr(df, "download", lambda url: pytest.fail("an expired link must not be downloaded"))
     df.set_setting(df.URL_KEY, PAST)
     assert df.run_and_record(force=True) == 1
@@ -288,7 +289,7 @@ def test_refused_link_is_reported(clean, monkeypatch):
         raise df.FeedError("The feed refused the link: it has expired or is wrong.")
 
     monkeypatch.setattr(df, "download", refuse)
-    monkeypatch.setattr(df, "get_recipients", lambda: [])
+    monkeypatch.setattr(alerts, "get_recipients", lambda: [])
     df.set_setting(df.URL_KEY, FUTURE)
     assert df.run_and_record(force=True) == 1
     assert df.get_setting(df.STATUS_KEY)["ok"] is False

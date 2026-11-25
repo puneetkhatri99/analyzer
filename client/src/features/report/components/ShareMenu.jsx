@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link2, Mail, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { shareLinks } from "../lib/share.js";
+import { shareLinks } from "@/lib/share.js";
 
 // Share: copy the report's link (whoever opens it signs up first) or email it from the visitor's own mail app.
 // Downloading is the separate "Download report" button.

@@ -1,4 +1,4 @@
-import { money } from "../../../lib/format.js"; // relative so node --test can run it
+import { money } from "./format.js"; // relative so node --test can run it
 
 // Full-time pay is yearly, part-time is an hourly rate.
 export const pay = (v, unit) => (v == null ? "—" : unit === "hour" ? `$${v.toFixed(2)}` : money(v));

@@ -1,4 +1,4 @@
-import { pay } from "../../report/lib/pay.js"; // relative so node --test can run it
+import { pay } from "../../../lib/pay.js"; // relative so node --test can run it
 
 const join = (...parts) => parts.flat().filter(Boolean).join(" · ");
 const REPORT_TITLE = { open: "Opened a report", update: "Updated the report", reset: "Reset the filters" };

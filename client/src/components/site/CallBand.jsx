@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { BOOK_URL } from "./links.js";
+import { BOOK_URL } from "@/lib/links.js";
 
 // The book-a-call band that closes the landing page and the report.
 export default function CallBand({ title, children, secondary }) {

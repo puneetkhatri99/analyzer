@@ -1,6 +1,6 @@
 import React from "react";
 import { longDay } from "@/lib/format.js";
-import { pay, per } from "../lib/pay.js";
+import { pay, per } from "@/lib/pay.js";
 import RangeBar from "./RangeBar.jsx";
 
 // The answer: typical pay, the range most churches offer, and how sure we are.

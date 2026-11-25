@@ -28,7 +28,7 @@ from app.extraction.validation import validate
 from app.ingestion import daily_feed
 from app.ingestion.daily_feed import ai_map, look_up_church
 from app.job_pages.parser import denomination_in
-from app.jobs.repository import BIZDEV_TABLES
+from app.shared.tables import BIZDEV_TABLES
 
 log = logging.getLogger("bizdev_enrich")
 
@@ -225,7 +225,7 @@ def run(limit: int | None = None) -> dict[str, Any]:
             daily_feed.alert_admin(
                 "MinistryHub monthly AI limit reached",
                 f"The BizDev AI step is paused: {result['skipped']}. "
-                f"Raise it in Admin → AI costs: {daily_feed._admin_link()}",
+                f"Raise it in Admin → AI costs: {daily_feed.admin_link()}",
             )
         else:
             result["skipped"] = "OPENAI_API_KEY isn't set"
